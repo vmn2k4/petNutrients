@@ -3,8 +3,8 @@
 import { rootOn, card, button, badge, esc, icon, comboField, mountCombos } from './ui.js';
 import { openSheet, toast } from './sheet.js';
 import { KCAL_NOTE } from './ui.js';
-import { getDiet, changeDiet, undoDietChange, listFoods, listSupplements, listTreats } from './store.js';
-import { supplementFits, energyPlan, currentDiet, dietChanges, dietPeriods, dietKcal, dietVsPlan, ingredientWarnings, treatPlan, TREAT_SHARE, perDay, unitWords, DIET_ROLES, DIET_UNITS, SUPPLEMENTS, fmtDay, todayStr, round } from './domain.js';
+import { getDiet, changeDiet, undoDietChange, setDietKcal, listFoods, listSupplements, listTreats } from './store.js';
+import { unitKcalOfFood, dietItemKcal, supplementFits, energyPlan, currentDiet, dietChanges, dietPeriods, dietKcal, dietVsPlan, ingredientWarnings, treatPlan, TREAT_SHARE, perDay, unitWords, DIET_ROLES, DIET_UNITS, SUPPLEMENTS, fmtDay, todayStr, round } from './domain.js';
 
 const foodLabel = (f) => `${f.brand} ${f.name}`;
 const amountText = (it) => `${it.amount} ${unitWords(it.unit, it.amount)} × ${it.timesPerDay} a day`;
@@ -15,11 +15,19 @@ export function dietHtml(pet, plan) {
   const diet = getDiet(); const now = currentDiet(diet);
   const treatsById = new Map(listTreats().map((t) => [t.id, t]));
   const foods = new Map([...listFoods(), ...listTreats()].map((f) => [f.id, f]));
-  const k = dietKcal(now, (id) => foods.get(id)?.kcalPerKg || null, (id) => treatsById.get(id)?.kcalPerTreat || null);
+  const k = dietKcal(now, (id) => foods.get(id) || null);
   const foodsNow = now.filter((it) => it.role !== 'supplement' && it.role !== 'treat'); const suppsNow = now.filter((it) => it.role === 'supplement'); const treatsNow = now.filter((it) => it.role === 'treat');
+  const perText = (it, ik) => (it.unit === 'g' ? `${Math.round(ik.perUnit * 100)} kcal per 100 g` : `${Math.round(ik.perUnit * 10) / 10} kcal per ${it.unit}`);
+  const SRC = { label: 'from the label', yours: 'your number', mix: 'homemade mix' };
+  const energyLine = (it, f) => {
+    if (it.role === 'supplement') return '';
+    const ik = dietItemKcal(it, f);
+    return ik ? `<div class="small" style="margin-top:2px">About <strong>${Math.round(ik.perDay)} kcal a day</strong> <span class="muted">· ${esc(perText(it, ik))} (${SRC[ik.source]})</span></div>`
+      : `<div class="small" style="margin-top:2px;color:var(--color-caution)">Calories not counted yet${it.unit !== 'g' ? ` (we have none per ${esc(it.unit)})` : ''}. <button type="button" class="linkbtn" data-diet="kcal" data-item="${it.id}">Add calories</button></div>`;
+  };
   const rowHtml = (it) => { const f = it.foodId ? foods.get(it.foodId) : null; const wrongSpecies = f && f.species !== pet.species; const iw = f && !wrongSpecies ? ingredientWarnings(f, pet).warn.find((w) => w.level === 'bad') : null;
     return `<li class="diet-row"><div class="diet-row__main"><strong>${esc(it.foodName)}</strong>${it.role !== 'main' && it.role !== 'supplement' ? ` ${badge(DIET_ROLES[it.role], 'info')}` : ''}${wrongSpecies ? ` ${badge(`Made for ${f.species}s`, 'bad', 'alert')}` : iw ? ` ${badge('Check ingredients', 'bad', 'alert')}` : ''}
-      <div class="small muted">${esc(amountText(it))} · ${esc(totalText(it))} · since ${fmtDay(it.startedOn)}${it.kcalPerKg && it.recipe ? ' · homemade mix' : ''}${it.role === 'treat' && it.unit === 'piece' && treatsById.get(it.foodId)?.kcalPerTreat ? ` · about ${Math.round(perDay(it) * treatsById.get(it.foodId).kcalPerTreat)} kcal` : ''}</div>${wrongSpecies ? `<div class="small" style="color:var(--color-bad)">This is a ${f.species} food and ${esc(pet.name)} is a ${pet.species}. ${f.species === 'cat' ? 'Cat food is richer in protein and fat and is not balanced for dogs.' : 'Dog food is not balanced for cats, who also need taurine.'} Please check with your vet.</div>` : iw ? `<div class="small" style="color:var(--color-bad)">${esc(iw.text)}</div>` : ''}</div>
+      <div class="small muted">${esc(amountText(it))} · ${esc(totalText(it))} · since ${fmtDay(it.startedOn)}</div>${energyLine(it, f)}${wrongSpecies ? `<div class="small" style="color:var(--color-bad)">This is a ${f.species} food and ${esc(pet.name)} is a ${pet.species}. ${f.species === 'cat' ? 'Cat food is richer in protein and fat and is not balanced for dogs.' : 'Dog food is not balanced for cats, who also need taurine.'} Please check with your vet.</div>` : iw ? `<div class="small" style="color:var(--color-bad)">${esc(iw.text)}</div>` : ''}</div>
       <div class="diet-row__acts"><button class="btn btn--ghost btn--small" type="button" data-diet="amount" data-item="${it.id}">Change amount</button>${it.role === 'supplement' ? '' : `<button class="btn btn--ghost btn--small" type="button" data-diet="replace" data-item="${it.id}">Replace</button>`}<button class="btn btn--ghost btn--small" type="button" data-diet="stop" data-item="${it.id}">Stop</button></div></li>`; };
   const planned = plan.hideKcal ? null : Math.round(plan.kcal); const vs = planned ? dietVsPlan(k, planned) : null;
   const barPct = vs && vs.pct != null ? Math.min(100, Math.max(0, vs.pct)) : 0;
@@ -67,9 +75,30 @@ export function openAddItem(pet, kind, item, rerender) {
   openChange(pet, 'add', null, rerender, kind === 'supplement' ? { supplement: true, prefill: item } : kind === 'treat' ? { treat: true, prefill: item } : { prefill: item });
 }
 
+// Add calories to a food that is already in the diet (no new history entry: the calories are a fact about the food).
+function openKcal(pet, itemId, rerender) {
+  const it = getDiet().find((x) => x.id === itemId); if (!it) return;
+  const g = it.unit === 'g'; const plan = energyPlan(pet);
+  openSheet({
+    title: `Calories in ${it.foodName}`,
+    body: `<form id="kc" class="stack" novalidate>
+      <p class="muted" style="margin:0">${esc(pet.name)} gets ${esc(amountText(it))}. Enter the calories for ${g ? '100 g' : `one ${esc(it.unit)}`} from the label or the maker's website, and we count it.</p>
+      <div class="field"><label for="kc-v">${g ? 'kcal per 100 g' : `kcal in one ${esc(it.unit)}`}</label><input class="input" id="kc-v" type="number" min="1" max="${g ? 950 : 5000}" step="any" inputmode="decimal" autofocus></div>
+      <p class="small" id="kc-live" style="margin:0" aria-live="polite"></p>
+      <p class="hint" style="margin:0">This is your number, kept on this food only. Labels often say "kcal per cup" or "kcal/kg" (divide kcal/kg by 10 for per 100 g).</p>
+      <div id="kc-err" class="error-text" role="alert"></div>
+      <div class="row row--between">${button({ label: 'Cancel', variant: 'ghost', attrs: 'data-close type="button"' })}${button({ label: 'Save calories', type: 'submit', iconName: 'check' })}</div></form>`,
+    onMount: (body, close) => {
+      const inp = body.querySelector('#kc-v'); const live = body.querySelector('#kc-live');
+      inp.addEventListener('input', () => { const v = Number(inp.value); const per = g ? v / 100 : v; live.textContent = v > 0 ? `That is about ${Math.round(it.amount * per)} kcal a meal, ${Math.round(perDay(it) * per)} kcal a day${plan.hideKcal ? '' : ` (${Math.round((perDay(it) * per / plan.kcal) * 100)}% of ${pet.name}'s plan)`}.` : ''; });
+      body.querySelector('#kc').addEventListener('submit', (e) => { e.preventDefault(); const r = setDietKcal(it.id, inp.value); if (!r.ok) { body.querySelector('#kc-err').textContent = r.message; return; } close(); toast('Calories saved'); rerender(); });
+    },
+  });
+}
+
 export function mountDiet(root, pet, rerender) {
   rootOn(root, 'click', 'diet', (e) => {
-    const b = e.target.closest('[data-diet]'); if (b) { if (b.dataset.diet === 'addsupp') openChange(pet, 'add', null, rerender, { supplement: true }); else if (b.dataset.diet === 'addtreat') openChange(pet, 'add', null, rerender, { treat: true }); else openChange(pet, b.dataset.diet, b.dataset.item, rerender); return; }
+    const b = e.target.closest('[data-diet]'); if (b) { if (b.dataset.diet === 'kcal') openKcal(pet, b.dataset.item, rerender); else if (b.dataset.diet === 'addsupp') openChange(pet, 'add', null, rerender, { supplement: true }); else if (b.dataset.diet === 'addtreat') openChange(pet, 'add', null, rerender, { treat: true }); else openChange(pet, b.dataset.diet, b.dataset.item, rerender); return; }
     // On a phone the whole row is the target: one tap opens the actions for that food.
     const row = e.target.closest('.diet-row');
     if (row && matchMedia('(max-width: 639px)').matches) {
@@ -97,10 +126,12 @@ function openChange(pet, startMode, itemId, rerender, opts = {}) {
       <fieldset class="field"><legend class="legend">What changed?</legend><div class="choices" role="radiogroup">${MODES.map(([v, l]) => `<label class="choice"><input type="radio" name="dc-mode" value="${v}" ${v === mode ? 'checked' : ''} ${!items.length && v !== 'add' ? 'disabled' : ''}><span>${l}</span></label>`).join('')}</div></fieldset>
       <div class="field" data-for="replace amount stop"><label for="dc-item">Which food?</label><select class="select" id="dc-item">${items.map((it) => `<option value="${it.id}" ${it.id === itemId ? 'selected' : ''}>${esc(it.foodName)} (${esc(amountText(it))})</option>`).join('')}</select></div>
       <div data-for="replace add">${comboField({ id: 'dc-food', label: sup ? 'Supplement' : tre ? 'Treat' : 'New food', options: sup ? suppOptions : foods.map(foodLabel), placeholder: sup ? 'Pick one or type any supplement' : tre ? 'Pick a treat from the list or type any treat' : 'Pick from the list or type any food', hint: 'Not in the list? Just type the name.' })}
-        ${sup || tre ? '' : `<div class="field" data-for="replace add" id="dc-kcal-f"><label for="dc-kcal">Calories in it, kcal per 100 g (optional)</label><input class="input" id="dc-kcal" type="number" min="1" max="950" step="any" inputmode="decimal"><span class="hint">Only for a food that is not in our list, so we can count it. Making your own food? <a href="/recipe">Build it in the mix builder</a> and add it from there.</span></div>`}</div>
+</div>
       <div class="grid grid--3" data-for="replace add amount"><div class="field"><label for="dc-amount">${tre ? 'How many each time' : sup ? 'How much each time' : 'How much each meal'}</label><input class="input" id="dc-amount" type="number" min="0.1" step="any" inputmode="decimal"></div>
         <div class="field" data-for="replace add"><label for="dc-unit">Unit</label><select class="select" id="dc-unit">${Object.entries(DIET_UNITS).map(([v, l]) => `<option value="${v}" ${(sup && v === 'scoop') || (tre && v === 'piece') ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label for="dc-times">Times a day</label><input class="input" id="dc-times" type="number" min="0.5" max="12" step="0.5" inputmode="decimal" value="2"></div></div>
+      ${sup ? '' : `<div class="field" data-for="replace add" id="dc-kcal-f"><label for="dc-kcal" id="dc-kcal-l">Calories in it, kcal per 100 g (optional)</label><input class="input" id="dc-kcal" type="number" min="1" max="5000" step="any" inputmode="decimal"><span class="hint">Only if the food is not in our list, or you know better than the label. It is kept as your number. Making your own food? <a href="/recipe">Build it in the mix builder</a> and add it from there.</span></div>`}
+      ${sup ? '' : '<p class="small" id="dc-live" data-for="replace add amount" style="margin:0" aria-live="polite"></p>'}
       <div class="field" data-for="replace add"><label for="dc-role">This is their</label><select class="select" id="dc-role">${Object.entries(DIET_ROLES).map(([v, l]) => `<option value="${v}" ${(sup && v === 'supplement') || (tre && v === 'treat') ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       ${sup ? '<p class="hint" data-for="add" style="margin:0">A supplement is listed but not counted in the calories. Ask your vet before starting one, especially if your pet takes medicine.</p>' : ''}${tre ? '<p class="hint" id="dc-treat-hint" data-for="add" style="margin:0">Pick a treat to see its calories and how many fit in a day. Treats are best kept to about 10% of the day, all together.</p>' : ''}<p class="hint" data-for="replace" style="margin:0">Most pets do better switching slowly over about a week, mixing the old and new food. Add the new food first and stop the old one a few days later if you are mixing.</p>
       <div id="dc-err" class="error-text" role="alert"></div>
@@ -137,7 +168,24 @@ function openChange(pet, startMode, itemId, rerender, opts = {}) {
         if (mode === 'amount' && cur()) { g('dc-amount').value = cur().amount; g('dc-times').value = cur().timesPerDay; }
         if (mode === 'replace' && cur()) { g('dc-role').value = cur().role; g('dc-unit').value = cur().unit; if (!g('dc-amount').value) g('dc-amount').value = cur().amount; g('dc-times').value = cur().timesPerDay; }
       };
-      form.addEventListener('change', sync); sync();
+      const allFoods = new Map([...listFoods(), ...listTreats()].map((f) => [f.id, f]));
+      const live = () => {
+        const out = body.querySelector('#dc-live'); if (!out) return;
+        const amount = Number(g('dc-amount').value); const times = Number(g('dc-times').value);
+        const m = form.querySelector('[name=dc-mode]:checked')?.value || 'add'; const kEl = g('dc-kcal');
+        const unitNow = m === 'amount' && cur() ? cur().unit : g('dc-unit').value;
+        const lab = body.querySelector('#dc-kcal-l'); if (lab) lab.textContent = unitNow === 'g' ? 'Calories in it, kcal per 100 g (optional)' : `Calories in one ${DIET_UNITS[unitNow] || unitNow}, kcal (optional)`;
+        if (kEl) kEl.max = unitNow === 'g' ? 950 : 5000;
+        if (m === 'stop' || !(amount > 0) || !(times > 0)) { out.textContent = ''; return; }
+        let per = null; let src = '';
+        if (m === 'amount' && cur()) { const ik = dietItemKcal(cur(), cur().foodId ? allFoods.get(cur().foodId) : null); per = ik ? ik.perUnit : null; src = ik ? ik.source : ''; }
+        else { const typedNow = (g('dc-food')?.value || '').trim().toLowerCase(); const hitNow = byLabel.get(typedNow); const v = Number(kEl?.value);
+          if (v > 0) { per = unitNow === 'g' ? v / 100 : v; src = 'yours'; } else if (hitNow) { per = unitKcalOfFood(unitNow, hitNow); src = per ? 'label' : ''; } }
+        const plan = energyPlan(pet);
+        out.textContent = per ? `That is about ${Math.round(amount * per)} kcal a meal and ${Math.round(amount * times * per)} kcal a day${plan.hideKcal ? '' : ` (${Math.round(((amount * times * per) / plan.kcal) * 100)}% of ${pet.name}'s plan)`}${src === 'label' ? ', from the label' : src === 'yours' ? ', from your number' : ''}.` : (tre && !per ? 'We have no calories for this treat in this measure yet.' : `We have no calories for this food in ${unitNow === 'g' ? 'grams' : `${DIET_UNITS[unitNow] || unitNow}s`} yet. Add calories above and we count it.`);
+      };
+      form.addEventListener('input', live); form.addEventListener('change', live);
+      form.addEventListener('change', sync); sync(); live();
       form.addEventListener('submit', (e) => {
         e.preventDefault(); const err = body.querySelector('#dc-err'); err.textContent = '';
         const date = g('dc-date').value; const item = cur(); const typed = (g('dc-food')?.value || '').trim();
@@ -145,11 +193,12 @@ function openChange(pet, startMode, itemId, rerender, opts = {}) {
         const amount = Number(g('dc-amount').value); const times = Number(g('dc-times').value);
         let change;
         if (mode === 'stop') { if (!item) { err.textContent = 'Pick the food that stopped.'; return; } change = { date, stops: [item.id], starts: [] }; }
-        else if (mode === 'amount') { if (!item) { err.textContent = 'Pick the food.'; return; } change = { date, stops: [item.id], starts: [{ foodName: item.foodName, foodId: item.foodId, role: item.role, amount, unit: item.unit, timesPerDay: times, replacesId: item.id }] }; }
+        else if (mode === 'amount') { if (!item) { err.textContent = 'Pick the food.'; return; } change = { date, stops: [item.id], starts: [{ foodName: item.foodName, foodId: item.foodId, role: item.role, amount, unit: item.unit, timesPerDay: times, replacesId: item.id, kcalPerKg: item.kcalPerKg, kcalPerUnit: item.kcalPerUnit, recipe: item.recipe }] }; }
         else {
           if (!typed) { err.textContent = 'Add the name of the new food.'; return; }
-          const kcal100 = Number(g('dc-kcal')?.value); if (!hit && g('dc-kcal')?.value && !(kcal100 > 0 && kcal100 <= 950)) { err.textContent = 'Calories per 100 g should be between 1 and 950.'; return; }
-          change = { date, stops: mode === 'replace' && item ? [item.id] : [], starts: [{ foodName: hit ? foodLabel(hit) : typed, foodId: hit?.id || null, ...(!hit && kcal100 > 0 ? { kcalPerKg: kcal100 * 10 } : {}), role: g('dc-role').value, amount, unit: g('dc-unit').value, timesPerDay: times, replacesId: mode === 'replace' && item ? item.id : undefined }] };
+          const unitNow = g('dc-unit').value; const kv = Number(g('dc-kcal')?.value); const kHas = !!g('dc-kcal')?.value;
+          if (kHas && !(kv > 0 && kv <= (unitNow === 'g' ? 950 : 5000))) { err.textContent = unitNow === 'g' ? 'Calories per 100 g should be between 1 and 950.' : `Calories in one ${unitNow} should be between 1 and 5,000.`; return; }
+          change = { date, stops: mode === 'replace' && item ? [item.id] : [], starts: [{ foodName: hit ? foodLabel(hit) : typed, foodId: hit?.id || null, ...(kHas && unitNow === 'g' ? { kcalPerKg: kv * 10 } : {}), ...(kHas && unitNow !== 'g' ? { kcalPerUnit: kv } : {}), role: g('dc-role').value, amount, unit: g('dc-unit').value, timesPerDay: times, replacesId: mode === 'replace' && item ? item.id : undefined }] };
         }
         const r = changeDiet(change);
         if (!r.ok) { err.textContent = r.message; return; }

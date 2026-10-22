@@ -270,8 +270,8 @@ const withStats = (f) => (liveFoods ? { ...f, ...statsFor(f.id) } : f);
 export const STORE_FOODS_LIVE = !!liveFoods;
 // ---------- diet log: what the pet eats, with dates ----------
 // function declarations (not const arrows): the startup load below runs before the lines that define consts, so these must already exist
-function fromDiet(r) { return { id: r.id, foodId: r.food_id, foodName: r.food_name, role: r.role, amount: Number(r.amount), unit: r.unit, timesPerDay: Number(r.times_per_day), startedOn: r.started_on, endedOn: r.ended_on, replacedId: r.replaced_id, note: r.note, ...(r.kcal_per_kg ? { kcalPerKg: Number(r.kcal_per_kg) } : {}), ...(r.recipe ? { recipe: r.recipe } : {}) }; }
-function toDiet(it) { return { id: it.id, pet_id: petId, food_id: it.foodId || null, food_name: it.foodName, role: it.role || 'main', amount: it.amount, unit: it.unit || 'g', times_per_day: it.timesPerDay, started_on: it.startedOn, ended_on: it.endedOn || null, replaced_id: it.replacedId || null, note: it.note || null, ...(it.kcalPerKg ? { kcal_per_kg: it.kcalPerKg } : {}), ...(it.recipe ? { recipe: it.recipe } : {}) }; } // kcal_per_kg and recipe are only sent when set, so a database without those columns still saves normal foods
+function fromDiet(r) { return { id: r.id, foodId: r.food_id, foodName: r.food_name, role: r.role, amount: Number(r.amount), unit: r.unit, timesPerDay: Number(r.times_per_day), startedOn: r.started_on, endedOn: r.ended_on, replacedId: r.replaced_id, note: r.note, ...(r.kcal_per_kg ? { kcalPerKg: Number(r.kcal_per_kg) } : {}), ...(r.kcal_per_unit ? { kcalPerUnit: Number(r.kcal_per_unit) } : {}), ...(r.recipe ? { recipe: r.recipe } : {}) }; }
+function toDiet(it) { return { id: it.id, pet_id: petId, food_id: it.foodId || null, food_name: it.foodName, role: it.role || 'main', amount: it.amount, unit: it.unit || 'g', times_per_day: it.timesPerDay, started_on: it.startedOn, ended_on: it.endedOn || null, replaced_id: it.replacedId || null, note: it.note || null, ...(it.kcalPerKg ? { kcal_per_kg: it.kcalPerKg } : {}), ...(it.kcalPerUnit ? { kcal_per_unit: it.kcalPerUnit } : {}), ...(it.recipe ? { recipe: it.recipe } : {}) }; } // kcal_per_kg, kcal_per_unit and recipe are only sent when set, so a database without those columns still saves normal foods
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`);
 export const getDiet = () => (isSignedIn() ? mem.pet?.diet || [] : []);
 // One call for every kind of change on one day: stop some foods (by id), start others. A start can say which stop it replaces.
@@ -283,7 +283,7 @@ export function changeDiet({ date, stops = [], starts = [] }) {
   if (date < (pet.birth || '0000')) return { ok: false, message: 'That is before your pet was born.' };
   for (const id of stops) { const it = diet.find((x) => x.id === id); if (!it) return { ok: false, message: 'That food is not in the current diet.' }; if (date < it.startedOn) return { ok: false, message: `${it.foodName} was only added on ${it.startedOn}, so it cannot stop before that.` }; }
   const stopped = diet.filter((x) => stops.includes(x.id)).map((x) => ({ ...x, endedOn: date }));
-  const fresh = starts.map((s) => ({ id: newId(), foodId: s.foodId || null, foodName: String(s.foodName).trim(), role: s.role || 'main', amount: Number(s.amount), unit: s.unit || 'g', timesPerDay: Number(s.timesPerDay) || 1, startedOn: date, endedOn: null, replacedId: s.replacesId || null, note: s.note || null, ...(Number(s.kcalPerKg) > 0 ? { kcalPerKg: Math.round(Number(s.kcalPerKg)) } : {}), ...(Array.isArray(s.recipe) && s.recipe.length ? { recipe: s.recipe } : {}) }));
+  const fresh = starts.map((s) => ({ id: newId(), foodId: s.foodId || null, foodName: String(s.foodName).trim(), role: s.role || 'main', amount: Number(s.amount), unit: s.unit || 'g', timesPerDay: Number(s.timesPerDay) || 1, startedOn: date, endedOn: null, replacedId: s.replacesId || null, note: s.note || null, ...(Number(s.kcalPerKg) > 0 ? { kcalPerKg: Math.round(Number(s.kcalPerKg)) } : {}), ...(Number(s.kcalPerUnit) > 0 ? { kcalPerUnit: Math.round(Number(s.kcalPerUnit) * 10) / 10 } : {}), ...(Array.isArray(s.recipe) && s.recipe.length ? { recipe: s.recipe } : {}) }));
   for (const it of fresh) { if (!it.foodName) return { ok: false, message: 'Add the name of the food.' }; if (!(it.amount > 0)) return { ok: false, message: 'Add how much they get at each meal.' }; if (!(it.timesPerDay > 0)) return { ok: false, message: 'Add how many times a day.' }; }
   pet.diet = [...fresh, ...diet.map((x) => stopped.find((y) => y.id === x.id) || x)]; save();
   sync(async () => {
@@ -292,6 +292,17 @@ export function changeDiet({ date, stops = [], starts = [] }) {
     if (fresh.length) await api('pet_diet_items', { method: 'POST', body: fresh.map(toDiet) });
   });
   return { ok: true, started: fresh.length, stopped: stopped.length };
+}
+// Add or correct the calories of a food already in the diet, in place (no new history entry): the calories are a fact about the food,
+// not a change in what the pet eats. `kcal` is per 100 g when the item is measured in grams, otherwise per one unit (cup, can, piece...).
+export function setDietKcal(id, kcal) {
+  const pet = mem.pet; const it = pet?.diet?.find((x) => x.id === id); const v = Number(kcal);
+  if (!it) return { ok: false, message: 'That food is not in the diet.' };
+  if (!(v > 0) || v > (it.unit === 'g' ? 950 : 5000)) return { ok: false, message: it.unit === 'g' ? 'Calories per 100 g should be between 1 and 950.' : 'Calories in one measure should be between 1 and 5,000.' };
+  if (it.unit === 'g') { it.kcalPerKg = Math.round(v * 10); delete it.kcalPerUnit; } else { it.kcalPerUnit = Math.round(v * 10) / 10; delete it.kcalPerKg; }
+  save();
+  sync(async () => { if (petId) await api(`pet_diet_items?id=eq.${it.id}`, { method: 'PATCH', body: { kcal_per_kg: it.kcalPerKg ?? null, kcal_per_unit: it.kcalPerUnit ?? null } }); });
+  return { ok: true };
 }
 // Undo a whole change day (a wrong entry): remove what started that day and bring back what stopped that day.
 export function undoDietChange(date) {

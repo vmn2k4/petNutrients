@@ -123,6 +123,12 @@ So a figure near 700 kcal is what a neutered, normally active, healthy dog of ab
 - Adding a mix to the diet saves its kcal per kg and its ingredient list with the diet item (`pet_diet_items.kcal_per_kg`, `recipe`), and the diet total counts it. A typed food can also carry an optional kcal per 100 g.
 - It is a calculator, not a complete diet: vitamins, trace minerals, essential fatty acids (and taurine for cats) are not checked. Raw meat, fish and eggs show a food-safety note. Test cases: `node supabase/golden/run_mix.mjs`.
 
+## 7d. Diet calories by measure (added 2026-10-22)
+
+- A diet item's calories follow the measure the pet is fed in: `kcal a day = amount × times a day × kcal in one measure`. One measure is a gram (kcal per kg ÷ 1,000), a cup (label kcal per cup, else grams per cup × kcal per kg), a can (only when the label's unit is a can), a piece (kcal per treat), or the owner's own number.
+- The owner's own number is kept on the item: kcal per 100 g for grams (`kcal_per_kg`), kcal in one measure for anything else (`kcal_per_unit`). The screen says "your number" or "from the label". A food with no calories in its measure is not counted and is never guessed from grams; the page names it and offers "Add calories".
+- Supplements are listed, not counted. Changing the amount of a food carries its calories over; adding calories to a food already in the diet edits it in place (no history entry).
+
 ## 8. Review log
 
 Reviewed against AAHA 2021 (Box 1 and text, read from the PDF), AAHA 2014 summary, and the Salt 2017 record. Changes made: dog weight-loss 1.0 (cat 0.8); dog low activity 1.1; neutered/intact at AAHA midpoints (dog 1.5/1.7, cat 1.3/1.5); one growth-target calorie number in picker and saved goal; dog and cat weight-loss pace bands; completed-month age; large-breed maturity 18 months; dog growth rows under 3 months removed; calcium to phosphorus ratio check.

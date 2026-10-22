@@ -771,14 +771,32 @@ export function dietPeriods(pet, items, now = new Date()) {
 
 // Calories a day from the foods we have calorie data for (amount in grams only). `kcalPerKg(foodId)` looks the food up.
 // A homemade mix carries its own kcal per kg (it.kcalPerKg); other foods are looked up.
-export function dietKcal(items, kcalPerKg, kcalPerPiece = () => null) {
+// Calories in ONE measured unit (a gram, a cup, a can, a piece) of a catalogue food, from its own label data. null when the label has none.
+export function unitKcalOfFood(unit, f) {
+  if (!f) return null;
+  if (unit === 'g') return f.kcalPerKg > 0 ? f.kcalPerKg / 1000 : null;
+  if (unit === 'cup') return f.kcalPerCup > 0 ? f.kcalPerCup : f.gramsPerCup > 0 && f.kcalPerKg > 0 ? (f.kcalPerKg * f.gramsPerCup) / 1000 : null;
+  if (unit === 'piece') return f.kcalPerTreat > 0 ? f.kcalPerTreat : null;
+  if (unit === 'can') return f.kcalPerUnit > 0 && /can|tin/i.test(f.kcalUnit || '') ? f.kcalPerUnit : null;
+  return null;
+}
+// What one diet item adds a day, and whose number it is: 'label' (the catalogue), 'yours' (typed by the owner) or 'mix' (a homemade mix).
+// Calories follow the measure the pet is fed in: 2 cups twice a day uses kcal per cup, not per gram.
+export function dietItemKcal(it, food) {
+  if (it.role === 'supplement') return null;
+  let per = null; let source = null;
+  if (it.unit === 'g' && it.kcalPerKg > 0) { per = it.kcalPerKg / 1000; source = it.recipe ? 'mix' : 'yours'; }
+  else if (it.unit !== 'g' && it.kcalPerUnit > 0) { per = it.kcalPerUnit; source = 'yours'; }
+  else { per = unitKcalOfFood(it.unit, food); source = per ? 'label' : null; }
+  return per ? { perUnit: per, perDay: perDay(it) * per, perMeal: it.amount * per, source } : null;
+}
+// Daily calories of the diet. `foodOf(id)` returns the catalogue food or treat for an id (or null). Supplements are listed, not counted.
+export function dietKcal(items, foodOf = () => null) {
   let kcal = 0; let known = 0; let unknown = 0; let supplements = 0; let treatKcal = 0; const uncounted = [];
   (items || []).forEach((it) => {
-    if (it.role === 'supplement') { supplements += 1; return; } // supplements are listed on their own and not counted
-    const k = it.unit === 'g' ? (it.kcalPerKg || (it.foodId ? kcalPerKg(it.foodId) : null)) : null;
-    const piece = !k && it.unit === 'piece' && it.foodId ? kcalPerPiece(it.foodId) : null; // a counted treat: kcal on the label per piece
-    const v = k ? (perDay(it) * k) / 1000 : piece ? perDay(it) * piece : null;
-    if (v != null) { kcal += v; known += 1; if (it.role === 'treat') treatKcal += v; } else { unknown += 1; uncounted.push(it.foodName); }
+    if (it.role === 'supplement') { supplements += 1; return; }
+    const r = dietItemKcal(it, it.foodId ? foodOf(it.foodId) : null);
+    if (r) { kcal += r.perDay; known += 1; if (it.role === 'treat') treatKcal += r.perDay; } else { unknown += 1; uncounted.push(it.foodName); }
   });
   return { kcal: Math.round(kcal), known, unknown, supplements, uncounted, treatKcal: Math.round(treatKcal) };
 }

@@ -5,7 +5,7 @@ import { analyseMix, nutrientTargets, energyPlan, DIET_ROLES, todayStr } from '.
 import { getPet, changeDiet } from '../store.js';
 import { GUIDES } from '../guides-data.js';
 import { guideCard } from './guides.js';
-import { KCAL_NOTE, card, button, notice, verdictBadge, pageHead, iconBubble, meter, selectField, esc, icon, emptyState, expNote, stat, field } from '../ui.js';
+import { rootOn, KCAL_NOTE, card, button, notice, verdictBadge, pageHead, iconBubble, meter, selectField, esc, icon, emptyState, expNote, stat, field } from '../ui.js';
 
 export function hub() {
   const items = [['chart', 'Growth chart and goal planner', 'Puppy or kitten? See their percentile, set a goal weight, get daily calories.', '/pet/growth'], ['flask', 'Homemade mix builder', 'Cooking at home? Add ingredients and see what is missing or too much.', '/recipe'], ['alert', 'Can my pet eat this?', 'Grapes, chocolate, cheese? Quick answers before you share a snack.', '/toxic']];
@@ -86,9 +86,9 @@ export function recipe() {
         root.querySelector('#rows').innerHTML = rows.map((r, i) => `<div class="input-row" style="grid-template-columns:1fr 7rem auto;align-items:end"><div class="field"><label for="ing${i}">Ingredient</label><select class="select" id="ing${i}" data-i="${i}" data-f="id">${ingOptions(r.id)}</select></div><div class="field"><label for="g${i}">${mode === 'pct' ? 'Percent' : 'Grams'}</label><input class="input" id="g${i}" type="number" min="0" step="any" inputmode="decimal" value="${r.amount}" data-i="${i}" data-f="amount"></div><button class="btn btn--ghost" type="button" aria-label="Remove ingredient ${i + 1}" data-rm="${i}">${icon('trash')}</button></div>`).join('');
         root.querySelector('#batch-f').hidden = mode !== 'pct'; out();
       };
-      root.addEventListener('input', (e) => { const t = e.target; if (t.dataset?.f) { rows[+t.dataset.i][t.dataset.f] = t.dataset.f === 'amount' ? Number(t.value) : t.value; out(); } else if (t.id === 'batch') { batchG = Number(t.value) || 1000; out(); } });
-      root.addEventListener('change', (e) => { const t = e.target; if (t.name === 'md') { mode = t.value; draw(); } else if (t.dataset?.f) { rows[+t.dataset.i][t.dataset.f] = t.dataset.f === 'amount' ? Number(t.value) : t.value; out(); } });
-      root.addEventListener('click', (e) => { const rm = e.target.closest('[data-rm]'); if (rm) { rows.splice(+rm.dataset.rm, 1); draw(); } if (e.target.closest('#add')) { rows.push({ id: INGREDIENTS[0].id, amount: mode === 'pct' ? 10 : 100 }); draw(); } if (e.target.closest('#to-diet')) openToDiet(root); });
+      rootOn(root, 'input', 'mix', (e) => { const t = e.target; if (t.dataset?.f) { rows[+t.dataset.i][t.dataset.f] = t.dataset.f === 'amount' ? Number(t.value) : t.value; out(); } else if (t.id === 'batch') { batchG = Number(t.value) || 1000; out(); } });
+      rootOn(root, 'change', 'mix', (e) => { const t = e.target; if (t.name === 'md') { mode = t.value; draw(); } else if (t.dataset?.f) { rows[+t.dataset.i][t.dataset.f] = t.dataset.f === 'amount' ? Number(t.value) : t.value; out(); } });
+      rootOn(root, 'click', 'mix', (e) => { const rm = e.target.closest('[data-rm]'); if (rm) { rows.splice(+rm.dataset.rm, 1); draw(); } if (e.target.closest('#add')) { rows.push({ id: INGREDIENTS[0].id, amount: mode === 'pct' ? 10 : 100 }); draw(); } if (e.target.closest('#to-diet')) openToDiet(root); });
       draw(); 
     },
   };

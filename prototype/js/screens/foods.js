@@ -5,7 +5,7 @@ import { toast, openSheet } from '../sheet.js';
 import { listTreats, listSupplements } from '../store.js';
 import { treatPlan, treatFit, ingredientWarnings, TOXIC_TERMS, supplementFits, supplementDose } from '../domain.js';
 import { openAddItem } from '../diet.js';
-import { notice } from '../ui.js';
+import { notice, rootOn } from '../ui.js';
 import { bindQuickWeight } from '../quickweight.js';
 import { chartKind } from '../petcharts.js';
 import { targetPickerHtml, mountTargetPicker } from '../targetpicker.js';
@@ -506,7 +506,7 @@ export function render() {
         root.querySelectorAll('[data-kind-tab]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kindTab === k)));
         if (k !== 'food') root.querySelector('#extraview').innerHTML = extraHtml(makeCtx());
       };
-      root.addEventListener('click', (e) => {
+      rootOn(root, 'click', 'foods', (e) => {
         const fa = e.target.closest('[data-fadd]'); if (fa) { const fd = listFoods().find((x) => x.id === fa.dataset.fadd); if (fd && getPet()) openAddItem(getPet(), 'food', fd, () => {}); return; }
         const kt = e.target.closest('[data-kind-tab]'); if (kt) { setKind(kt.dataset.kindTab); return; }
         const xt = e.target.closest('[data-xtype]'); if (xt) { state.xtype = xt.dataset.xtype; state.xshown = 48; root.querySelectorAll('[data-xtype]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.xtype === state.xtype))); extraOut(); return; }
@@ -515,8 +515,8 @@ export function render() {
         const td = e.target.closest('[data-tdetail]'); if (td) { const t = listTreats().find((x) => x.id === td.dataset.tdetail); if (t) treatSheet(t, makeCtx()); return; }
         const ad = e.target.closest('[data-add]'); if (ad && isSignedIn() && getPet()) { const kind = ad.dataset.kind; const item = (kind === 'supplement' ? listSupplements() : listTreats()).find((x) => x.id === ad.dataset.add); if (item) openAddItem(getPet(), kind, item, extraOut); }
       });
-      root.addEventListener('input', (e) => { if (e.target.id === 'xq') { state.xq = e.target.value; state.xshown = 48; extraOut(); } });
-      root.addEventListener('change', (e) => { if (e.target.id === 'xs') { state.xsort = e.target.value; extraOut(); } else if (e.target.id === 'xh') { state.xhide = e.target.checked; extraOut(); } });
+      rootOn(root, 'input', 'foods', (e) => { if (e.target.id === 'xq') { state.xq = e.target.value; state.xshown = 48; extraOut(); } });
+      rootOn(root, 'change', 'foods', (e) => { if (e.target.id === 'xs') { state.xsort = e.target.value; extraOut(); } else if (e.target.id === 'xh') { state.xhide = e.target.checked; extraOut(); } });
       root.querySelector('#qedit')?.addEventListener('click', () => { setQuickPet(null); rerender(); });
       const qf = root.querySelector('#qform');
       if (qf) {

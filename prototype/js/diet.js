@@ -1,6 +1,6 @@
 // DIET: what the pet eats now, how it changed over time, and what happened to growth during each stretch.
 // The log is descriptive. Growth depends on age, health, treats and season, so nothing here claims a food "caused" a change.
-import { card, button, badge, esc, icon, comboField, mountCombos } from './ui.js';
+import { rootOn, card, button, badge, esc, icon, comboField, mountCombos } from './ui.js';
 import { openSheet, toast } from './sheet.js';
 import { KCAL_NOTE } from './ui.js';
 import { getDiet, changeDiet, undoDietChange, listFoods, listSupplements, listTreats } from './store.js';
@@ -68,7 +68,7 @@ export function openAddItem(pet, kind, item, rerender) {
 }
 
 export function mountDiet(root, pet, rerender) {
-  root.addEventListener('click', (e) => {
+  rootOn(root, 'click', 'diet', (e) => {
     const b = e.target.closest('[data-diet]'); if (b) { if (b.dataset.diet === 'addsupp') openChange(pet, 'add', null, rerender, { supplement: true }); else if (b.dataset.diet === 'addtreat') openChange(pet, 'add', null, rerender, { treat: true }); else openChange(pet, b.dataset.diet, b.dataset.item, rerender); return; }
     // On a phone the whole row is the target: one tap opens the actions for that food.
     const row = e.target.closest('.diet-row');

@@ -1,0 +1,86 @@
+/* Phosphor Icons (MIT), subset to icons used by this site. Rebuild if you add icons. */
+@font-face {
+  font-family: "Phosphor";
+  src: url("/assets/vendor/phosphor/regular/Phosphor.min.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+.ph {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: "Phosphor" !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Enable Ligatures ================ */
+  letter-spacing: 0;
+  -webkit-font-feature-settings: "liga";
+  -moz-font-feature-settings: "liga=1";
+  -moz-font-feature-settings: "liga";
+  -ms-font-feature-settings: "liga" 1;
+  font-feature-settings: "liga";
+  -webkit-font-variant-ligatures: discretionary-ligatures;
+  font-variant-ligatures: discretionary-ligatures;
+
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ph.ph-arrow-left:before{content:"\e058"}
+.ph.ph-arrow-right:before{content:"\e06c"}
+.ph.ph-article:before{content:"\e0a8"}
+.ph.ph-barcode:before{content:"\e0b8"}
+.ph.ph-bone:before{content:"\e7f2"}
+.ph.ph-book:before{content:"\e0e2"}
+.ph.ph-book-open-text:before{content:"\e8f2"}
+.ph.ph-bowl-food:before{content:"\eaa4"}
+.ph.ph-camera:before{content:"\e10e"}
+.ph.ph-carrot:before{content:"\ed38"}
+.ph.ph-cat:before{content:"\e748"}
+.ph.ph-chart-line-up:before{content:"\e156"}
+.ph.ph-check:before{content:"\e182"}
+.ph.ph-check-circle:before{content:"\e184"}
+.ph.ph-cheese:before{content:"\e9fe"}
+.ph.ph-code:before{content:"\e1bc"}
+.ph.ph-dog:before{content:"\e74a"}
+.ph.ph-dots-three:before{content:"\e1fe"}
+.ph.ph-egg:before{content:"\e812"}
+.ph.ph-file:before{content:"\e230"}
+.ph.ph-fire:before{content:"\e242"}
+.ph.ph-fish:before{content:"\e728"}
+.ph.ph-flask:before{content:"\e79e"}
+.ph.ph-funnel:before{content:"\e266"}
+.ph.ph-ghost:before{content:"\e62a"}
+.ph.ph-heart:before{content:"\e2a8"}
+.ph.ph-house:before{content:"\e2c2"}
+.ph.ph-image:before{content:"\e2ca"}
+.ph.ph-info:before{content:"\e2ce"}
+.ph.ph-leaf:before{content:"\e2da"}
+.ph.ph-link:before{content:"\e2e2"}
+.ph.ph-note:before{content:"\e348"}
+.ph.ph-orange:before{content:"\ee40"}
+.ph.ph-paw-print:before{content:"\e648"}
+.ph.ph-plus:before{content:"\e3d4"}
+.ph.ph-activity:before{content:"\e000"}
+.ph.ph-question:before{content:"\e3e8"}
+.ph.ph-radio:before{content:"\e77e"}
+.ph.ph-rows:before{content:"\e5a2"}
+.ph.ph-ruler:before{content:"\e6b8"}
+.ph.ph-scales:before{content:"\e750"}
+.ph.ph-scan:before{content:"\ebb6"}
+.ph.ph-shield:before{content:"\e40a"}
+.ph.ph-shield-check:before{content:"\e40c"}
+.ph.ph-stack:before{content:"\e466"}
+.ph.ph-star:before{content:"\e46a"}
+.ph.ph-tag:before{content:"\e478"}
+.ph.ph-target:before{content:"\e47c"}
+.ph.ph-trash:before{content:"\e4a6"}
+.ph.ph-warning:before{content:"\e4e0"}
+.ph.ph-x:before{content:"\e4f6"}
+.ph.ph-x-circle:before{content:"\e4f8"}

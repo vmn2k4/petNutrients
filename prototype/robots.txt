@@ -1,0 +1,7 @@
+# TODO: replace example.com with the real domain (also js/seo.js SITE and SITE_URL build env)
+User-agent: *
+Allow: /
+Disallow: /pet
+Disallow: /pet/
+
+Sitemap: https://example.com/sitemap.xml

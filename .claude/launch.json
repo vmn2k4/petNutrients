@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "prototype", "runtimeExecutable": "python3", "runtimeArgs": ["prototype/scripts/serve_spa.py", "5173"], "port": 5173 }
+  ]
+}

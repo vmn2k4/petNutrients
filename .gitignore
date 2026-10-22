@@ -1,0 +1,14 @@
+.env.local
+node_modules/
+.vercel/
+.DS_Store
+prototype/dist/
+prototype_backup_copy_*/
+*.tar
+supabase/.temp/
+.claude/settings.local.json
+.claude/worktrees/
+# Raw datasets: large (800 MB), and some are not cleared for redistribution (e.g. the AKC breed table).
+# Rebuild them with data/download_datasets.py; the docs in data/*.md and the script stay in the repo.
+data/*/
+data/*.docx

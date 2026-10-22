@@ -1,0 +1,127 @@
+/* DESIGN TOKENS: single source of truth for colors, fonts, spacing, radii, shadows, motion.
+   Nothing else may hard-code these values. Later generated from packages/tokens/tokens.json (also emits Flutter ThemeData).
+   Shape rule: buttons are pills, cards use --radius-lg, inputs use --radius-md. */
+
+:root {
+  /* neutrals: cool, near-white, ink for text and primary buttons */
+  --color-bg: #f7f9f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef3f3;
+  --color-fg: #0e2a30;
+  --color-fg-muted: #51676c;
+  --color-border: #dfe7e8;
+  --color-ink: #0e2a30;
+  --color-on-ink: #f7f9f9;
+
+  /* brand: playful yellow + green (decor), green is the text-safe primary */
+  --brand-yellow: #ffd21f;
+  --brand-yellow-deep: #f2bd00;
+  --brand-green: #15803d;
+  --brand-orange: #f59a1f;
+  --color-primary: #15803d;
+  --color-primary-hover: #166534;
+  --color-on-primary: #ffffff;
+  --color-primary-soft: #dcf5e4;
+  --color-ring: #15803d;
+  --color-accent: var(--color-primary);
+  --color-on-accent: var(--color-on-primary);
+
+  /* status (always paired with icon + label) */
+  --color-good: #0b6b46;
+  --color-good-bg: #daf3e6;
+  --color-caution: #8a4b0a;
+  --color-caution-bg: #fbecd2;
+  --color-bad: #a61b1b;
+  --color-bad-bg: #fbe0e0;
+  --color-info: #116030;
+  --color-info-bg: #dcf5e4;
+
+  /* chart */
+  --chart-band-outer: rgb(21 128 61 / 0.13);
+  --chart-band-inner: rgb(21 128 61 / 0.28);
+  --chart-median: #15803d;
+  --chart-point: #e8590c;
+
+  /* typography */
+  --font-display: 'Fredoka', 'Geist', 'Noto Sans', system-ui, sans-serif;
+  --font-heading: 'Geist', 'Noto Sans', system-ui, sans-serif;
+  --font-body: 'Geist', 'Noto Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
+  --text-3xl: clamp(2.5rem, 5vw + 0.5rem, 4.25rem);
+  --leading-body: 1.65;
+  --leading-tight: 1.08;
+
+  /* spacing (spacious) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --space-7: 3.5rem;
+  --space-8: 5rem;
+  --space-9: 8rem;
+  --gutter: clamp(1.25rem, 5vw, 3rem);
+  --content-width: 76rem;
+  --touch-min: 2.75rem;
+  --nav-height: 4rem;
+
+  /* shape + depth */
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.75rem;
+  --radius-xl: 2.25rem;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgb(14 42 48 / 0.04);
+  --shadow-md: 0 18px 50px -18px rgb(14 42 48 / 0.18);
+
+  /* motion */
+  --motion-fast: 160ms;
+  --motion-base: 300ms;
+  --motion-slow: 700ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Light is the only theme by default: the device's dark mode no longer switches it.
+   The dark palette applies only when <html data-theme="dark"> is set on purpose. */
+:root { color-scheme: light; }
+@media all {
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+    --color-bg: #0a1a1e;
+    --color-surface: #102429;
+    --color-surface-2: #15303a;
+    --color-fg: #eaf4f5;
+    --color-fg-muted: #9db8bd;
+    --color-border: #1f3d45;
+    --color-ink: #eaf4f5;
+    --color-on-ink: #0a1a1e;
+    --color-primary: #4ade80;
+    --color-primary-hover: #86efac;
+    --color-on-primary: #052e16;
+    --color-primary-soft: #0f3a22;
+    --color-ring: #4ade80;
+    --color-good: #7de3b5;
+    --color-good-bg: #0c3a2a;
+    --color-caution: #f5c777;
+    --color-caution-bg: #3a2c0c;
+    --color-bad: #f5a3a3;
+    --color-bad-bg: #431515;
+    --color-info: #4ade80;
+    --color-info-bg: #0f3a22;
+    --chart-band-outer: rgb(74 222 128 / 0.12);
+    --chart-band-inner: rgb(74 222 128 / 0.26);
+    --chart-median: #4ade80;
+    --chart-point: #ff9a62;
+    --shadow-md: 0 18px 50px -18px rgb(0 0 0 / 0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms; }
+}

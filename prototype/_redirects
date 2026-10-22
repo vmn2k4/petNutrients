@@ -1,0 +1,2 @@
+# Netlify: SPA fallback. Prerendered /path/index.html is served first when present.
+/*    /index.html   200

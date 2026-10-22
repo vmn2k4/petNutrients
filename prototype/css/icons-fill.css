@@ -1,0 +1,86 @@
+/* Phosphor Icons (MIT), subset to icons used by this site. Rebuild if you add icons. */
+@font-face {
+  font-family: "Phosphor-Fill";
+  src: url("/assets/vendor/phosphor/fill/Phosphor-Fill.min.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+.ph-fill {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: "Phosphor-Fill" !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Enable Ligatures ================ */
+  letter-spacing: 0;
+  -webkit-font-feature-settings: "liga";
+  -moz-font-feature-settings: "liga=1";
+  -moz-font-feature-settings: "liga";
+  -ms-font-feature-settings: "liga" 1;
+  font-feature-settings: "liga";
+  -webkit-font-variant-ligatures: discretionary-ligatures;
+  font-variant-ligatures: discretionary-ligatures;
+
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ph-fill.ph-arrow-left:before{content:"\e058"}
+.ph-fill.ph-arrow-right:before{content:"\e06c"}
+.ph-fill.ph-article:before{content:"\e0a8"}
+.ph-fill.ph-barcode:before{content:"\e0b8"}
+.ph-fill.ph-bone:before{content:"\e7f2"}
+.ph-fill.ph-book:before{content:"\e0e2"}
+.ph-fill.ph-book-open-text:before{content:"\e8f2"}
+.ph-fill.ph-bowl-food:before{content:"\eaa4"}
+.ph-fill.ph-camera:before{content:"\e10e"}
+.ph-fill.ph-carrot:before{content:"\ed38"}
+.ph-fill.ph-cat:before{content:"\e748"}
+.ph-fill.ph-chart-line-up:before{content:"\e156"}
+.ph-fill.ph-check:before{content:"\e182"}
+.ph-fill.ph-check-circle:before{content:"\e184"}
+.ph-fill.ph-cheese:before{content:"\e9fe"}
+.ph-fill.ph-code:before{content:"\e1bc"}
+.ph-fill.ph-dog:before{content:"\e74a"}
+.ph-fill.ph-dots-three:before{content:"\e1fe"}
+.ph-fill.ph-egg:before{content:"\e812"}
+.ph-fill.ph-file:before{content:"\e230"}
+.ph-fill.ph-fire:before{content:"\e242"}
+.ph-fill.ph-fish:before{content:"\e728"}
+.ph-fill.ph-flask:before{content:"\e79e"}
+.ph-fill.ph-funnel:before{content:"\e266"}
+.ph-fill.ph-ghost:before{content:"\e62a"}
+.ph-fill.ph-heart:before{content:"\e2a8"}
+.ph-fill.ph-house:before{content:"\e2c2"}
+.ph-fill.ph-image:before{content:"\e2ca"}
+.ph-fill.ph-info:before{content:"\e2ce"}
+.ph-fill.ph-leaf:before{content:"\e2da"}
+.ph-fill.ph-link:before{content:"\e2e2"}
+.ph-fill.ph-note:before{content:"\e348"}
+.ph-fill.ph-orange:before{content:"\ee40"}
+.ph-fill.ph-paw-print:before{content:"\e648"}
+.ph-fill.ph-plus:before{content:"\e3d4"}
+.ph-fill.ph-activity:before{content:"\e000"}
+.ph-fill.ph-question:before{content:"\e3e8"}
+.ph-fill.ph-radio:before{content:"\e77e"}
+.ph-fill.ph-rows:before{content:"\e5a2"}
+.ph-fill.ph-ruler:before{content:"\e6b8"}
+.ph-fill.ph-scales:before{content:"\e750"}
+.ph-fill.ph-scan:before{content:"\ebb6"}
+.ph-fill.ph-shield:before{content:"\e40a"}
+.ph-fill.ph-shield-check:before{content:"\e40c"}
+.ph-fill.ph-stack:before{content:"\e466"}
+.ph-fill.ph-star:before{content:"\e46a"}
+.ph-fill.ph-tag:before{content:"\e478"}
+.ph-fill.ph-target:before{content:"\e47c"}
+.ph-fill.ph-trash:before{content:"\e4a6"}
+.ph-fill.ph-warning:before{content:"\e4e0"}
+.ph-fill.ph-x:before{content:"\e4f6"}
+.ph-fill.ph-x-circle:before{content:"\e4f8"}

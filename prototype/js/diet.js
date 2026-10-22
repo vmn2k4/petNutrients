@@ -4,7 +4,7 @@ import { card, button, badge, esc, icon, comboField, mountCombos } from './ui.js
 import { openSheet, toast } from './sheet.js';
 import { KCAL_NOTE } from './ui.js';
 import { getDiet, changeDiet, undoDietChange, listFoods, listSupplements, listTreats } from './store.js';
-import { energyPlan, currentDiet, dietChanges, dietPeriods, dietKcal, dietVsPlan, ingredientWarnings, treatPlan, TREAT_SHARE, perDay, unitWords, DIET_ROLES, DIET_UNITS, SUPPLEMENTS, fmtDay, todayStr, round } from './domain.js';
+import { supplementFits, energyPlan, currentDiet, dietChanges, dietPeriods, dietKcal, dietVsPlan, ingredientWarnings, treatPlan, TREAT_SHARE, perDay, unitWords, DIET_ROLES, DIET_UNITS, SUPPLEMENTS, fmtDay, todayStr, round } from './domain.js';
 
 const foodLabel = (f) => `${f.brand} ${f.name}`;
 const amountText = (it) => `${it.amount} ${unitWords(it.unit, it.amount)} × ${it.timesPerDay} a day`;
@@ -85,7 +85,7 @@ function openChange(pet, startMode, itemId, rerender, opts = {}) {
   const sup = !!opts.supplement; const tre = !!opts.treat;
   const items = currentDiet(getDiet());
   // Supplements: catalogue products for this species once they exist, then the built-in common ones. Typing any other name still works.
-  const catSupps = listSupplements().filter((s) => !s.species || s.species === pet.species);
+  const catSupps = listSupplements().filter((s) => supplementFits(s, pet.species));
   const suppOptions = [...catSupps.map((s) => foodLabel(s)), ...SUPPLEMENTS.filter((n) => !catSupps.some((s) => foodLabel(s).toLowerCase() === n.toLowerCase()))];
   const treatList = listTreats().filter((t) => t.species === pet.species);
   const foods = sup ? catSupps : tre ? treatList : listFoods(); const byLabel = new Map(foods.map((f) => [foodLabel(f).toLowerCase(), f]));

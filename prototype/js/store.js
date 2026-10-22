@@ -202,6 +202,13 @@ const fromCatalog = (p) => ({
 });
 const fromTreat = (p) => ({ ...fromCatalog(p), isTreat: true, treatType: p.treat_type, kcalPerTreat: p.kcal_per_treat, kcalPerTreatUnit: p.kcal_per_treat_unit, gramsPerTreat: p.grams_per_treat,
   treatFeedingText: p.treat_feeding_text, treatBands: Array.isArray(p.treat_feeding_bands) ? p.treat_feeding_bands : [], completeAndBalanced: p.complete_and_balanced, vohc: !!p.vohc_seal });
+const fromSupplement = (p) => ({
+  id: p.id.replace(/-/g, '_'), isSupplement: true, brand: p.brand, name: p.name, species: p.species, speciesAll: p.species_all || null, speciesUnknown: (p.qa_flags || []).includes('species_unknown'),
+  type: p.supplement_type, form: p.supplement_form, servingSize: p.serving_size, dosingText: p.dosing_text, dosingBands: Array.isArray(p.dosing_bands) ? p.dosing_bands : [], claim: p.label_claim_text,
+  actives: Array.isArray(p.active_ingredients) ? p.active_ingredients : [], ingredients: p.ingredients || [], partialIngredients: p.ingredients_partial, kcalPerServing: p.kcal_per_serving, kcalPerServingUnit: p.kcal_per_serving_unit,
+  vetOnly: !!p.vet_only, nasc: !!p.nasc_seal, cfu: p.probiotic_cfu, img: p.image_url || null, photo: p.image_url || null,
+  buyUrl: p.buy_url_us || p.buy_url, buyType: p.buy_url_us ? p.buy_url_us_type : p.buy_url_type, buyRetailer: p.buy_url_us ? p.buy_retailer_us : p.buy_retailer, sourceUrl: p.source_url, credit: p.attribution, markets: p.markets || [],
+});
 // Open Pet Food Facts rows are crowd-sourced and their nutrient numbers are often wrong (per serving, mistyped), so they are used
 // for barcode lookup only (name, brand, ingredients, picture) and never for ranking or fit.
 const fromOpff = (p) => {
@@ -244,9 +251,10 @@ async function loadFoods() {
     const tcols = `${cols},treat_type,kcal_per_treat,kcal_per_treat_unit,grams_per_treat,treat_feeding_text,treat_feeding_bands,complete_and_balanced,vohc_seal`;
     liveTreats = (await pub('catalog', `products?select=${tcols}&product_type=eq.treat&prescription=is.false&order=name,id`)).map(fromTreat);
   } catch (e) { console.warn('Treats unavailable.', e.message); liveTreats = []; }
-  // Supplements are being added to the catalogue. Until there are rows this is empty and the diet page offers its built-in list.
+  // Supplements (product_type = 'supplement'): label text only. Species can be unstated on the listing (qa flag species_unknown).
   try {
-    liveSupplements = (await pub('catalog', `products?select=id,brand,name,species&product_type=eq.supplement&order=name,id`)).map((p) => ({ id: p.id.replace(/-/g, '_'), brand: p.brand, name: p.name, species: p.species }));
+    const scols = 'id,brand,name,species,species_all,supplement_type,supplement_form,serving_size,dosing_text,dosing_bands,label_claim_text,active_ingredients,ingredients,ingredients_partial,kcal_per_serving,kcal_per_serving_unit,vet_only,nasc_seal,qa_flags,image_url,image_type,buy_url,buy_url_type,buy_retailer,buy_url_us,buy_url_us_type,buy_retailer_us,price_cad_min,source_url,attribution,markets,probiotic_cfu';
+    liveSupplements = (await pub('catalog', `products?select=${scols}&product_type=eq.supplement&order=name,id`)).map(fromSupplement);
   } catch (e) { liveSupplements = []; }
 }
 try { await loadFoods(); } catch (e) { console.warn('Foods unavailable, showing sample foods.', e.message); }

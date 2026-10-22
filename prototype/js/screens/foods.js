@@ -3,7 +3,7 @@ import { brandGuide, weightCheck, weightLossKcal, NUTRIENTS, NUTRIENT_HELP, GOAL
 import { KCAL_NOTE, foodPic, card, badge, verdictBadge, verdictBanner, stars, button, icon, esc, pageHead, emptyState, choiceGroup, selectField, field, expNote, comboField, mountCombos, sizeBlock, bindBreedSize } from '../ui.js';
 import { toast, openSheet } from '../sheet.js';
 import { listTreats, listSupplements } from '../store.js';
-import { treatPlan, treatFit, ingredientWarnings, TOXIC_TERMS } from '../domain.js';
+import { treatPlan, treatFit, ingredientWarnings, TOXIC_TERMS, supplementFits, supplementDose } from '../domain.js';
 import { openAddItem } from '../diet.js';
 import { notice } from '../ui.js';
 import { bindQuickWeight } from '../quickweight.js';
@@ -383,20 +383,50 @@ function treatCard(t, pet, kcal) {
     <div class="row" style="margin-top:var(--space-3)">${button({ label: 'Details', variant: 'secondary btn--small', attrs: `data-tdetail="${t.id}" type="button"` })}${addBtn(t.id, 'treat')}</div>`, { flat: false })}${buy}</div>`;
 }
 
-function supplementCard(s) {
-  return `<div class="fcwrap">${card(`<h3 class="card__title">${esc(s.name)}</h3><p class="muted small" style="margin:0">${esc(s.brand)}${s.species ? `, ${esc(s.species)}` : ''}</p>
-    <p class="small muted" style="margin:var(--space-3) 0">Listed in the diet, not counted in calories. Ask your vet before starting one.</p><div class="row">${addBtn(s.id, 'supplement')}</div>`)}</div>`;
+const SUPP_TYPE = { joint: 'Joint', 'skin & coat': 'Skin and coat', multivitamin: 'Multivitamin', 'probiotic/digestive': 'Probiotic and digestive', calming: 'Calming', immune: 'Immune', dental: 'Dental', 'liver/kidney': 'Liver and kidney', 'fish oil/omega': 'Fish oil and omega', urinary: 'Urinary', hairball: 'Hairball', other: 'Other' };
+const suppType = (t) => SUPP_TYPE[t] || 'Supplement';
+const suppFor = (s) => (s.speciesAll && s.speciesAll.length ? `For ${s.speciesAll.map((x) => `${x}s`).join(' and ')}` : s.speciesUnknown ? 'Species not stated on the label' : `For ${s.species}s`);
+const doseLine = (s, pet) => {
+  if (!pet) return null; const d = supplementDose(s, pet.weightKg);
+  if (d && d.amount != null && d.covered !== false) return `Label dose at ${fmtn(pet.weightKg)} kg: ${fmtn(d.amount)} ${d.unit}`.trim();
+  if (d && d.covered === false) return `The label's weight table does not cover ${fmtn(pet.weightKg)} kg. Check the bag.`;
+  return s.dosingText ? 'See the label for the dose' : 'Dose not on our data. Check the bag.';
+};
+function supplementCard(s, pet) {
+  const buy = s.buyUrl ? `<a class="fc__buy" href="${esc(s.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${s.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(s.buyRetailer || 'a retailer')}</span></a>` : '';
+  const dose = doseLine(s, pet);
+  return `<div class="fcwrap">${card(`${s.photo ? `<div class="fc__img">${foodPic(s)}</div>` : ''}
+    <div class="row row--between">${badge(suppType(s.type), 'info')}${s.vetOnly ? badge('Vet only', 'caution') : ''}</div>
+    <h3 class="card__title" style="margin-top:var(--space-3)">${esc(s.name)}</h3><p class="muted small" style="margin:0">${esc(s.brand)} · ${esc(suppFor(s))}</p>
+    ${s.claim ? `<p class="small" style="margin:var(--space-3) 0 0"><span class="muted">Label says:</span> ${esc(s.claim.length > 140 ? `${s.claim.slice(0, 140)}…` : s.claim)}</p>` : ''}
+    ${dose ? `<p class="small" style="margin:var(--space-2) 0 0">${esc(dose)}</p>` : ''}
+    <p class="small muted" style="margin:var(--space-2) 0 0">Listed in the diet, not counted in calories. Ask your vet before starting one.</p>
+    <div class="row" style="margin-top:var(--space-3)">${button({ label: 'Details', variant: 'secondary btn--small', attrs: `data-sdetail="${s.id}" type="button"` })}${addBtn(s.id, 'supplement')}</div>`)}${buy}</div>`;
+}
+
+function supplementSheet(s, ctx) {
+  const pet = ctx.pet; const dose = doseLine(s, pet);
+  const actives = s.actives.length ? `<ul class="small" style="margin:0;padding-left:1.2rem">${s.actives.map((a) => `<li>${esc(a.name || '')}${a.amount != null ? `: ${esc(String(a.amount))} ${esc(a.unit || '')}` : ''}</li>`).join('')}</ul>` : '<p class="small muted" style="margin:0">Amounts per serving are not in our data (many brands print them in images). Check the bag.</p>';
+  const body = `<div class="stack"><p style="margin:0"><strong>${esc(suppType(s.type))}</strong>${s.form ? ` · ${esc(s.form)}` : ''} · ${esc(suppFor(s))}${s.servingSize ? ` · serving: ${esc(s.servingSize)}` : ''}</p>
+    ${s.claim ? `<p class="small" style="margin:0"><span class="muted">The label says:</span> ${esc(s.claim)}</p>` : ''}
+    ${dose ? `<p class="small" style="margin:0"><strong>${esc(dose)}</strong></p>` : ''}${s.dosingText ? `<p class="small" style="margin:0"><span class="muted">Dosing on the label:</span> ${esc(s.dosingText)}</p>` : ''}
+    <div><div class="small muted">In each serving</div>${actives}</div>
+    ${s.ingredients.length && s.ingredients.every((i) => i.length <= 60) ? `<div><div class="small muted">Ingredients</div><div class="chips">${s.ingredients.slice(0, 40).map((i) => badge(i)).join('')}</div></div>` : '<p class="small muted" style="margin:0">No clean ingredient list in our data. Check the bag.</p>'}
+    ${s.nasc ? '<p class="small" style="margin:0">States the NASC quality seal.</p>' : ''}
+    <p class="hint" style="margin:0">Claims are the maker's label text, not ours, and we have not checked that they work. Supplements are not counted in calories${s.kcalPerServing ? ` (this one lists ${fmtn(s.kcalPerServing)} kcal per ${esc(s.kcalPerServingUnit || 'serving')})` : ''}. Some supplements can interact with medicines, so ask your vet before you start one. Information is copied from the maker's page and may be incomplete.</p>
+    <div class="row">${addBtn(s.id, 'supplement')}${s.buyUrl ? button({ label: `${s.buyType === 'search' ? 'Search at' : 'Buy at'} ${s.buyRetailer || 'a retailer'}`, href: s.buyUrl, variant: 'secondary', iconName: 'cart', attrs: 'target="_blank" rel="noopener noreferrer sponsored"' }) : ''}</div></div>`;
+  openSheet({ title: `${s.brand} ${s.name}`, body, onMount: (el, close) => { el.querySelector('[data-add]')?.addEventListener('click', () => { if (isSignedIn() && getPet()) { close(); openAddItem(getPet(), 'supplement', s, () => {}); } }); } });
 }
 
 function extraResults(ctx) {
   const pet = ctx.pet; const species = pet?.species || 'dog'; const q = state.xq.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const match = (x) => q.every((w) => `${x.brand} ${x.name}`.toLowerCase().includes(w));
   if (state.kind === 'supplement') {
-    const list = listSupplements().filter((s) => (!s.species || s.species === species) && match(s));
-    if (!listSupplements().length) return emptyState({ img: 'cut-beagle', title: 'Supplements are coming', text: 'We are adding supplements to this list. You can already add one by name on the Diet page.' });
-    return list.length ? `<p class="muted small" aria-live="polite">${list.length} supplement${list.length === 1 ? '' : 's'}</p><div class="grid grid--auto">${list.slice(0, state.xshown).map(supplementCard).join('')}</div>` : emptyState({ img: 'cut-beagle', title: 'No supplements match', text: 'Try fewer words.' });
+    const all = listSupplements();
+    if (!all.length) return emptyState({ img: 'cut-beagle', title: 'Supplements are coming', text: 'We are adding supplements to this list. You can already add one by name on the Diet page.' });
+    const list = all.filter((s) => supplementFits(s, species) && (state.xtype === 'all' || s.type === state.xtype) && match(s));
+    return list.length ? `<h2 class="sr-only">Supplement results</h2><p class="muted small" aria-live="polite">${list.length} supplement${list.length === 1 ? '' : 's'}${pet ? ` for ${esc(pet.name)}` : ''}. We list what the label says and do not judge whether they work. Ask your vet first.</p><div class="grid grid--auto">${list.slice(0, state.xshown).map((s) => supplementCard(s, pet)).join('')}</div>${list.length > state.xshown ? `<div style="margin-top:var(--space-5);text-align:center">${button({ label: `Show more (${list.length - state.xshown} left)`, variant: 'secondary', attrs: 'id="xmore" type="button"' })}</div>` : ''}` : emptyState({ img: 'cut-beagle', title: 'No supplements match', text: 'Try another type or fewer words.' });
   }
-  if (species === 'cat') return emptyState({ img: 'cut-cat', title: 'No cat treats yet', text: 'We only have dog treats so far. Cat treats are coming.' });
   const kcal = kcalOfPet(pet);
   let list = listTreats().filter((t) => t.species === species && (state.xtype === 'all' || t.treatType === state.xtype) && match(t));
   if (pet && state.xhide) list = list.filter((t) => !allergenHits(t, pet).length);
@@ -410,12 +440,12 @@ function extraResults(ctx) {
 }
 
 function extraHtml(ctx) {
-  const types = ['all', ...new Set(listTreats().map((t) => t.treatType).filter(Boolean))];
-  return `<div class="stack">${ctx.pet ? '' : notice('Add your pet to check ingredients against allergies and to see how many treats fit in a day.', 'info')}
+  const types = ['all', ...new Set((state.kind === 'supplement' ? listSupplements().map((s) => s.type) : listTreats().map((t) => t.treatType)).filter(Boolean))];
+  return `<div class="stack">${ctx.pet ? '' : notice(state.kind === 'supplement' ? 'Add your pet to see only the supplements for their species and the label dose for their weight.' : 'Add your pet to check ingredients against allergies and to see how many treats fit in a day.', 'info')}
     <div class="grid grid--3"><div class="field"><label for="xq">Search</label><input class="input" id="xq" type="search" value="${esc(state.xq)}" placeholder="Brand or name" autocomplete="off"></div>
       <div class="field" id="xs-f" ${state.kind === 'treat' ? '' : 'hidden'}><label for="xs">Sort by</label><select class="select" id="xs">${[['budget', 'Most treats a day'], ['calories', 'Fewest calories per treat'], ['name', 'Name']].map(([v, l]) => `<option value="${v}" ${state.xsort === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       ${ctx.pet && state.kind === 'treat' ? `<label class="switch" style="align-self:end"><input type="checkbox" id="xh" ${state.xhide ? 'checked' : ''}><span class="switch__ui" aria-hidden="true"></span><span class="small">Hide treats with ${esc(ctx.pet.name)}'s allergens</span></label>` : ''}</div>
-    <div class="row" id="xtypes" role="group" aria-label="Treat type" ${state.kind === 'treat' ? '' : 'hidden'}>${types.map((v) => `<button type="button" class="chipbtn chipbtn--toggle" data-xtype="${esc(v)}" aria-pressed="${state.xtype === v}">${v === 'all' ? 'All' : typeLabel(v)}</button>`).join('')}</div>
+    <div class="row" id="xtypes" role="group" aria-label="Type">${types.map((v) => `<button type="button" class="chipbtn chipbtn--toggle" data-xtype="${esc(v)}" aria-pressed="${state.xtype === v}">${v === 'all' ? 'All' : state.kind === 'supplement' ? suppType(v) : typeLabel(v)}</button>`).join('')}</div>
     <div id="xres">${extraResults(ctx)}</div></div>`;
 }
 
@@ -471,7 +501,7 @@ export function render() {
       // Foods / Treats / Supplements: the food view is not re-rendered, it is only hidden
       const extraOut = () => { const x = root.querySelector('#xres'); if (x) x.innerHTML = extraResults(makeCtx()); };
       const setKind = (k) => {
-        state.kind = k; state.xshown = 48; root.querySelector('#foodview').hidden = k !== 'food'; root.querySelector('#extraview').hidden = k === 'food';
+        state.kind = k; state.xshown = 48; state.xtype = 'all'; root.querySelector('#foodview').hidden = k !== 'food'; root.querySelector('#extraview').hidden = k === 'food';
         root.querySelectorAll('[data-kind-tab]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kindTab === k)));
         if (k !== 'food') root.querySelector('#extraview').innerHTML = extraHtml(makeCtx());
       };
@@ -479,6 +509,7 @@ export function render() {
         const kt = e.target.closest('[data-kind-tab]'); if (kt) { setKind(kt.dataset.kindTab); return; }
         const xt = e.target.closest('[data-xtype]'); if (xt) { state.xtype = xt.dataset.xtype; state.xshown = 48; root.querySelectorAll('[data-xtype]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.xtype === state.xtype))); extraOut(); return; }
         if (e.target.closest('#xmore')) { state.xshown += 48; extraOut(); return; }
+        const sd = e.target.closest('[data-sdetail]'); if (sd) { const s = listSupplements().find((x) => x.id === sd.dataset.sdetail); if (s) supplementSheet(s, makeCtx()); return; }
         const td = e.target.closest('[data-tdetail]'); if (td) { const t = listTreats().find((x) => x.id === td.dataset.tdetail); if (t) treatSheet(t, makeCtx()); return; }
         const ad = e.target.closest('[data-add]'); if (ad && isSignedIn() && getPet()) { const kind = ad.dataset.kind; const item = (kind === 'supplement' ? listSupplements() : listTreats()).find((x) => x.id === ad.dataset.add); if (item) openAddItem(getPet(), kind, item, extraOut); }
       });

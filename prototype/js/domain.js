@@ -705,6 +705,17 @@ export function treatFit(treat, pet) {
   return { verdict, warn };
 }
 
+// ---- supplements ---------------------------------------------------------------------------------
+// A supplement fits a pet when its label names that species. Some listings do not say (species_unknown): they are shown to both, marked.
+export const supplementFits = (s, species) => (s.speciesAll && s.speciesAll.length ? s.speciesAll.includes(species) : s.speciesUnknown || !s.species || s.species === species);
+// The label's dose for a pet's weight, from the parsed weight table. Only returned when the pet's weight is on the table.
+export function supplementDose(s, weightKg) {
+  const bands = (s.dosingBands || []).filter((b) => b.amount != null);
+  if (!bands.length || !weightKg) return null;
+  const b = bands.find((x) => weightKg >= (x.weight_kg_min ?? 0) - 0.01 && weightKg <= (x.weight_kg_max ?? Infinity) + 0.01);
+  return b ? { amount: b.amount, unit: b.unit || '', raw: b.raw || '' } : { covered: false };
+}
+
 // ---- diet log ------------------------------------------------------------------------------------
 // A diet item is { id, foodId, foodName, role, amount, unit, timesPerDay, startedOn, endedOn, replacedId }. `endedOn` is the day it
 // stopped being fed (not fed from that day on). A change on day D ends the old items on D and starts the new ones on D.

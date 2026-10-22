@@ -192,7 +192,7 @@ const guess = (t) => (t || '').split(/,(?![^()]*\))/).map((x) => x.replace(/[_*]
 
 const fromCatalog = (p) => ({
   id: p.id.replace(/-/g, '_'), img: genericImg(p.species, p.format), barcode: null, brand: p.brand, name: p.name, species: p.species, format: p.format || 'other', formDetail: p.form_detail,
-  lifeStage: p.life_stage, protein: p.protein_g_100g, fat: p.fat_g_100g, fibre: p.fibre_g_100g, moisture: p.moisture_g_100g, kcalPerKg: p.kcal_per_kg, calcium: p.calcium_g_100g, phosphorus: p.phosphorus_g_100g,
+  lifeStage: p.life_stage, protein: p.protein_g_100g, fat: p.fat_g_100g, fibre: p.fibre_g_100g, moisture: p.moisture_g_100g, ash: p.ash_g_100g, kcalPerKg: p.kcal_per_kg, calcium: p.calcium_g_100g, phosphorus: p.phosphorus_g_100g,
   kcalPerCup: p.kcal_per_cup, kcalPerUnit: p.kcal_per_unit, kcalUnit: p.kcal_unit, gramsPerCup: p.grams_per_cup,
   // price is CAD from Canadian retailers only; other foods show no price rather than a guess
   pricePerKg: p.price_per_kg_cad_min ?? null, markets: p.markets || [], madeIn: p.made_in || null, grainFree: p.grain_free, proteinSources: p.protein_sources || [], productLine: p.product_line,
@@ -235,7 +235,7 @@ let liveSupplements = []; // supplements, once they are in the catalogue (produc
 let liveTreats = []; // dog treats, chews and lickables (product_type = 'treat'); empty when they could not load
 async function loadFoods() {
   if (!SUPABASE_URL) return;
-  const cols = 'id,brand,name,species,format,form_detail,life_stage,kcal_per_kg,kcal_per_cup,kcal_per_unit,kcal_unit,grams_per_cup,protein_g_100g,fat_g_100g,fibre_g_100g,moisture_g_100g,calcium_g_100g,phosphorus_g_100g,ingredients,ingredients_partial,protein_sources,grain_free,probiotics,glucosamine_chondroitin,collagen_added,omega3_source,markets,made_in,product_line,price_per_kg_cad_min,buy_url,buy_url_type,buy_retailer,image_url,image_type,label_country,source_url,attribution';
+  const cols = 'id,brand,name,species,format,form_detail,life_stage,kcal_per_kg,kcal_per_cup,kcal_per_unit,kcal_unit,grams_per_cup,protein_g_100g,fat_g_100g,fibre_g_100g,moisture_g_100g,ash_g_100g,calcium_g_100g,phosphorus_g_100g,ingredients,ingredients_partial,protein_sources,grain_free,probiotics,glucosamine_chondroitin,collagen_added,omega3_source,markets,made_in,product_line,price_per_kg_cad_min,buy_url,buy_url_type,buy_retailer,image_url,image_type,label_country,source_url,attribution';
   // foods only (treats live in the same table, product_type = 'treat'), not retired, not prescription; unknown life stage is kept (the fit check flags it); a food needs an ingredient list (allergy matching) and protein and fat. Calories may be blank: those foods show "calories not reported".
   const cat = await pub('catalog', `products?select=${cols}&product_type=eq.food&retired=is.false&prescription=is.false&protein_g_100g=not.is.null&fat_g_100g=not.is.null&ingredients=not.eq.{}&order=name,id`);
   liveFoods = cat.map(fromCatalog);

@@ -771,6 +771,32 @@ export function dietPeriods(pet, items, now = new Date()) {
 
 // Calories a day from the foods we have calorie data for (amount in grams only). `kcalPerKg(foodId)` looks the food up.
 // A homemade mix carries its own kcal per kg (it.kcalPerKg); other foods are looked up.
+// Calories from the label analysis when the maker does not state them (retailer listings often do not). This is the modified Atwater
+// calculation pet food makers use when they do not test: ME kcal/kg = 10 x (3.5 protein + 8.5 fat + 3.5 NFE), where NFE (carbohydrate) is
+// 100 minus protein, fat, fibre, ash and moisture, all as fed. Ash and fibre are often missing, so a typical value is assumed and listed.
+// The raw formula runs low against labels (guaranteed analyses are minimums), so it is scaled by food type. The scale and the error margin
+// were fitted on the 1,208 foods in our catalogue that do state their calories (rows used to fit and to test were kept apart):
+// dry food lands within 10% for 97% of foods, wet food for only 58%, so wet and other foods carry a wider margin (the stated margins cover about 90% of foods).
+// It is always shown as an estimate with its margin, never as the maker's number.
+const KCAL_EST_SCALE = { dry: 1.044, wet: 1.225, other: 1.06 }; const KCAL_EST_MARGIN = { dry: 8, wet: 25, other: 20 };
+export function estimateKcal(f) {
+  if (!f || f.protein == null || f.fat == null || f.moisture == null) return null;
+  const assumed = []; let fibre = f.fibre; let ash = f.ash;
+  if (fibre == null) { fibre = f.moisture >= 60 ? 0.5 : 3; assumed.push('fibre'); }
+  if (ash == null) { ash = f.moisture >= 60 ? 2 : f.moisture >= 15 ? 4.5 : 7; assumed.push('ash'); }
+  const nfe = 100 - f.protein - f.fat - fibre - ash - f.moisture;
+  if (nfe < -2) return null; // the numbers do not add up (a mistyped label), so no estimate
+  const fmt = KCAL_EST_SCALE[f.format] ? f.format : 'other';
+  const kcalPerKg = 10 * (3.5 * f.protein + 8.5 * f.fat + 3.5 * Math.max(0, nfe)) * KCAL_EST_SCALE[fmt];
+  return kcalPerKg >= 500 && kcalPerKg <= 5200 ? { kcalPerKg: Math.round(kcalPerKg / 10) * 10, assumed, margin: KCAL_EST_MARGIN[fmt] } : null;
+}
+// Calories in one measure of a food: the label's own number first, else the estimate (flagged). { per, source: 'label' | 'estimate' } or null.
+export function foodUnitKcal(unit, f) {
+  const lab = unitKcalOfFood(unit, f); if (lab) return { per: lab, source: 'label' };
+  const e = f && !(f.kcalPerKg > 0) ? estimateKcal(f) : null; if (!e) return null;
+  const per = unit === 'g' ? e.kcalPerKg / 1000 : unit === 'cup' && f.gramsPerCup > 0 ? (e.kcalPerKg * f.gramsPerCup) / 1000 : null;
+  return per ? { per, source: 'estimate', margin: e.margin } : null;
+}
 // Calories in ONE measured unit (a gram, a cup, a can, a piece) of a catalogue food, from its own label data. null when the label has none.
 export function unitKcalOfFood(unit, f) {
   if (!f) return null;
@@ -780,15 +806,15 @@ export function unitKcalOfFood(unit, f) {
   if (unit === 'can') return f.kcalPerUnit > 0 && /can|tin/i.test(f.kcalUnit || '') ? f.kcalPerUnit : null;
   return null;
 }
-// What one diet item adds a day, and whose number it is: 'label' (the catalogue), 'yours' (typed by the owner) or 'mix' (a homemade mix).
+// What one diet item adds a day, and whose number it is: 'label' (the catalogue), 'estimate' (worked out from the label analysis), 'yours' (typed by the owner) or 'mix' (a homemade mix).
 // Calories follow the measure the pet is fed in: 2 cups twice a day uses kcal per cup, not per gram.
 export function dietItemKcal(it, food) {
   if (it.role === 'supplement') return null;
-  let per = null; let source = null;
+  let per = null; let source = null; let margin = null;
   if (it.unit === 'g' && it.kcalPerKg > 0) { per = it.kcalPerKg / 1000; source = it.recipe ? 'mix' : 'yours'; }
   else if (it.unit !== 'g' && it.kcalPerUnit > 0) { per = it.kcalPerUnit; source = 'yours'; }
-  else { per = unitKcalOfFood(it.unit, food); source = per ? 'label' : null; }
-  return per ? { perUnit: per, perDay: perDay(it) * per, perMeal: it.amount * per, source } : null;
+  else { const u = foodUnitKcal(it.unit, food); per = u ? u.per : null; source = u ? u.source : null; margin = u ? u.margin : null; }
+  return per ? { perUnit: per, perDay: perDay(it) * per, perMeal: it.amount * per, source, margin } : null;
 }
 // Daily calories of the diet. `foodOf(id)` returns the catalogue food or treat for an id (or null). Supplements are listed, not counted.
 export function dietKcal(items, foodOf = () => null) {

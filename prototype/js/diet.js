@@ -4,7 +4,7 @@ import { rootOn, card, button, badge, esc, icon, comboField, mountCombos } from 
 import { openSheet, toast } from './sheet.js';
 import { KCAL_NOTE } from './ui.js';
 import { getDiet, changeDiet, undoDietChange, setDietKcal, listFoods, listSupplements, listTreats } from './store.js';
-import { unitKcalOfFood, dietItemKcal, supplementFits, energyPlan, currentDiet, dietChanges, dietPeriods, dietKcal, dietVsPlan, ingredientWarnings, treatPlan, TREAT_SHARE, perDay, unitWords, DIET_ROLES, DIET_UNITS, SUPPLEMENTS, fmtDay, todayStr, round } from './domain.js';
+import { foodUnitKcal, dietItemKcal, supplementFits, energyPlan, currentDiet, dietChanges, dietPeriods, dietKcal, dietVsPlan, ingredientWarnings, treatPlan, TREAT_SHARE, perDay, unitWords, DIET_ROLES, DIET_UNITS, SUPPLEMENTS, fmtDay, todayStr, round } from './domain.js';
 
 const foodLabel = (f) => `${f.brand} ${f.name}`;
 const amountText = (it) => `${it.amount} ${unitWords(it.unit, it.amount)} × ${it.timesPerDay} a day`;
@@ -18,11 +18,11 @@ export function dietHtml(pet, plan) {
   const k = dietKcal(now, (id) => foods.get(id) || null);
   const foodsNow = now.filter((it) => it.role !== 'supplement' && it.role !== 'treat'); const suppsNow = now.filter((it) => it.role === 'supplement'); const treatsNow = now.filter((it) => it.role === 'treat');
   const perText = (it, ik) => (it.unit === 'g' ? `${Math.round(ik.perUnit * 100)} kcal per 100 g` : `${Math.round(ik.perUnit * 10) / 10} kcal per ${it.unit}`);
-  const SRC = { label: 'from the label', yours: 'your number', mix: 'homemade mix' };
+  const SRC = { label: 'from the label', estimate: 'estimated from the label analysis', yours: 'your number', mix: 'homemade mix' };
   const energyLine = (it, f) => {
     if (it.role === 'supplement') return '';
     const ik = dietItemKcal(it, f);
-    return ik ? `<div class="small" style="margin-top:2px">About <strong>${Math.round(ik.perDay)} kcal a day</strong> <span class="muted">· ${esc(perText(it, ik))} (${SRC[ik.source]})</span></div>`
+    return ik ? `<div class="small" style="margin-top:2px">About <strong>${Math.round(ik.perDay)} kcal a day</strong> <span class="muted">· ${esc(perText(it, ik))} (${SRC[ik.source]}${ik.margin ? `, about ${ik.margin}% either way` : ''})</span></div>`
       : `<div class="small" style="margin-top:2px;color:var(--color-caution)">Calories not counted yet${it.unit !== 'g' ? ` (we have none per ${esc(it.unit)})` : ''}. <button type="button" class="linkbtn" data-diet="kcal" data-item="${it.id}">Add calories</button></div>`;
   };
   const rowHtml = (it) => { const f = it.foodId ? foods.get(it.foodId) : null; const wrongSpecies = f && f.species !== pet.species; const iw = f && !wrongSpecies ? ingredientWarnings(f, pet).warn.find((w) => w.level === 'bad') : null;
@@ -177,12 +177,12 @@ function openChange(pet, startMode, itemId, rerender, opts = {}) {
         const lab = body.querySelector('#dc-kcal-l'); if (lab) lab.textContent = unitNow === 'g' ? 'Calories in it, kcal per 100 g (optional)' : `Calories in one ${DIET_UNITS[unitNow] || unitNow}, kcal (optional)`;
         if (kEl) kEl.max = unitNow === 'g' ? 950 : 5000;
         if (m === 'stop' || !(amount > 0) || !(times > 0)) { out.textContent = ''; return; }
-        let per = null; let src = '';
-        if (m === 'amount' && cur()) { const ik = dietItemKcal(cur(), cur().foodId ? allFoods.get(cur().foodId) : null); per = ik ? ik.perUnit : null; src = ik ? ik.source : ''; }
+        let per = null; let src = ''; let mg = null;
+        if (m === 'amount' && cur()) { const ik = dietItemKcal(cur(), cur().foodId ? allFoods.get(cur().foodId) : null); per = ik ? ik.perUnit : null; src = ik ? ik.source : ''; mg = ik ? ik.margin : null; }
         else { const typedNow = (g('dc-food')?.value || '').trim().toLowerCase(); const hitNow = byLabel.get(typedNow); const v = Number(kEl?.value);
-          if (v > 0) { per = unitNow === 'g' ? v / 100 : v; src = 'yours'; } else if (hitNow) { per = unitKcalOfFood(unitNow, hitNow); src = per ? 'label' : ''; } }
+          if (v > 0) { per = unitNow === 'g' ? v / 100 : v; src = 'yours'; } else if (hitNow) { const u = foodUnitKcal(unitNow, hitNow); per = u ? u.per : null; src = u ? u.source : ''; mg = u ? u.margin : null; } }
         const plan = energyPlan(pet);
-        out.textContent = per ? `That is about ${Math.round(amount * per)} kcal a meal and ${Math.round(amount * times * per)} kcal a day${plan.hideKcal ? '' : ` (${Math.round(((amount * times * per) / plan.kcal) * 100)}% of ${pet.name}'s plan)`}${src === 'label' ? ', from the label' : src === 'yours' ? ', from your number' : ''}.` : (tre && !per ? 'We have no calories for this treat in this measure yet.' : `We have no calories for this food in ${unitNow === 'g' ? 'grams' : `${DIET_UNITS[unitNow] || unitNow}s`} yet. Add calories above and we count it.`);
+        out.textContent = per ? `That is about ${Math.round(amount * per)} kcal a meal and ${Math.round(amount * times * per)} kcal a day${plan.hideKcal ? '' : ` (${Math.round(((amount * times * per) / plan.kcal) * 100)}% of ${pet.name}'s plan)`}${src === 'label' ? ', from the label' : src === 'estimate' ? ', an estimate: the maker does not state calories, so we worked it out from the label analysis (about ' + mg + '% either way)' : src === 'yours' ? ', from your number' : ''}.` : (tre && !per ? 'We have no calories for this treat in this measure yet.' : `We have no calories for this food in ${unitNow === 'g' ? 'grams' : `${DIET_UNITS[unitNow] || unitNow}s`} yet. Add calories above and we count it.`);
       };
       form.addEventListener('input', live); form.addEventListener('change', live);
       form.addEventListener('change', sync); sync(); live();

@@ -1,5 +1,5 @@
 import { getFood, listReviews, addReview, getSaved, toggleSaved, isSignedIn } from '../store.js';
-import { brandGuide, foodFit, NUTRIENTS, gramsPerDay, costPerDay, TOXIC_TERMS, allergenHits } from '../domain.js';
+import { estimateKcal, brandGuide, foodFit, NUTRIENTS, gramsPerDay, costPerDay, TOXIC_TERMS, allergenHits } from '../domain.js';
 import { KCAL_NOTE, foodPic, card, badge, stars, meter, verdictBanner, button, icon, esc, notice, ratingInput, field, stat, pageBand, emptyState, expNote } from '../ui.js';
 import { makeCtx } from './foods.js';
 import { openAddItem } from '../diet.js';
@@ -13,7 +13,9 @@ const reviewItem = (r) => `<article class="card card--flat"><div class="row row-
   ${!r.subscribe && r.why ? `<p class="small muted" style="margin:var(--space-3) 0 0">Why not: ${esc(r.why)}</p>` : ''}</article>`;
 
 export function render({ id }) {
-  const food = getFood(id);
+  const food0 = getFood(id); const est = food0 && !(food0.kcalPerKg > 0) ? estimateKcal(food0) : null;
+  // no calories from the maker: work them out from the label analysis and say so on the page
+  const food = est ? { ...food0, kcalPerKg: est.kcalPerKg, kcalEstimated: true, estAssumed: est.assumed, estMargin: est.margin } : food0;
   if (!food) return { title: 'Not found', html: `${pageBand('Hmm, that food is missing', 'It may have been renamed or removed.')}<div class="page page--narrow">${emptyState({ img: 'cut-kitten', title: 'We sniffed everywhere, no luck', text: 'Try browsing the list instead.', action: button({ label: 'Back to foods', href: '/foods' }) })}</div>` };
   const { pet, plan, targets } = makeCtx();
   const fit = pet ? foodFit(food, pet, plan, targets) : null;
@@ -47,6 +49,7 @@ export function render({ id }) {
           ${card(`<h2>${pet ? `For ${esc(pet.name)}` : 'How much to feed'}</h2>${g ? `<div class="grid grid--2">${stat(`${Math.round(g)} g`, 'per day', `${Math.round(plan.kcal)} kcal`)}${stat(c ? `$${c.toFixed(2)}` : 'n/a', 'per day', 'sample price')}</div>` : '<p class="muted">Add a pet profile for amounts and cost.</p>'}
             ${food.kcalPerKg ? `<p class="small" style="margin:var(--space-3) 0 0"><strong>${Math.round(food.kcalPerKg / 10)} kcal per 100 g</strong>${g && plan ? `<span class="muted"> · ${esc(pet.name)} needs about ${Math.round(plan.kcal)} kcal a day, so about ${Math.round(g)} g of this food</span>` : ''}</p>` : ''}
             ${g ? `<p class="hint">${KCAL_NOTE}</p>` : ''}
+            ${food.kcalEstimated ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-caution)">${icon('alert')} The maker does not state calories for this food, so ${Math.round(food.kcalPerKg / 10)} kcal per 100 g is our estimate from its protein, fat, moisture${food.estAssumed.length ? ` and typical ${food.estAssumed.join(' and ')}` : ''} (about ${food.estMargin}% either way). Check the bag.</p>` : ''}
             ${food.kcalPerKg ? '' : '<p class="small muted" style="margin:var(--space-3) 0 0">Calories are not reported for this food, so we cannot work out a daily amount.</p>'}
             <p class="hint">Energy: ${food.kcalPerKg ? `${food.kcalPerKg} kcal/kg` : 'not reported'}${food.kcalPerCup ? ` · ${food.kcalPerCup} kcal per cup` : ''}${food.kcalPerUnit ? ` · ${food.kcalPerUnit} kcal per ${esc(food.kcalUnit || 'unit')}` : ''} · Protein ${food.protein ?? 'not reported'}% · Fat ${food.fat ?? 'not reported'}% · Fibre ${food.fibre ?? 'not reported'}% · Moisture ${food.moisture ?? 'not reported'}%</p>
             ${(() => { const bg = pet ? brandGuide(food, pet.weightKg) : null; const rows = food.guide || [];

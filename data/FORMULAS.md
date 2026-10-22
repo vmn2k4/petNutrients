@@ -129,6 +129,12 @@ So a figure near 700 kcal is what a neutered, normally active, healthy dog of ab
 - The owner's own number is kept on the item: kcal per 100 g for grams (`kcal_per_kg`), kcal in one measure for anything else (`kcal_per_unit`). The screen says "your number" or "from the label". A food with no calories in its measure is not counted and is never guessed from grams; the page names it and offers "Add calories".
 - Supplements are listed, not counted. Changing the amount of a food carries its calories over; adding calories to a food already in the diet edits it in place (no history entry).
 
+## 7e. Calories when the maker does not state them (added 2026-10-22)
+
+- About 48% of catalogue foods (all retailer listings and many brand pages) have protein, fat and moisture but no calories. For those the app works out an estimate with the modified Atwater method pet food makers use when they do not test: kcal per kg = 10 × (3.5 × protein + 8.5 × fat + 3.5 × carbohydrate), carbohydrate = 100 − protein − fat − fibre − ash − moisture (all as fed). Missing fibre or ash is replaced by a typical value (dry: fibre 3, ash 7; semi-moist: ash 4.5; wet: fibre 0.5, ash 2) and the screen names what was assumed. A label that does not add up gets no estimate.
+- Checked against the 1,208 foods that do state calories (981 where an estimate was possible): the raw formula ran low (guaranteed analyses are minimums), so it is scaled by food type (dry ×1.044, wet ×1.225, other ×1.06). After scaling the median error is about 0%; dry foods land within 10% for 97%, wet foods for only 58%, other for 72%. The stated margin (dry 8%, wet 25%, other 20%) contains the maker's number for 95% of foods overall.
+- The estimate is always labelled as an estimate with its margin, appears only in the diet (rows and the add sheet) and on the food page, and never replaces a maker figure. It is not used for rankings or fit.
+
 ## 8. Review log
 
 Reviewed against AAHA 2021 (Box 1 and text, read from the PDF), AAHA 2014 summary, and the Salt 2017 record. Changes made: dog weight-loss 1.0 (cat 0.8); dog low activity 1.1; neutered/intact at AAHA midpoints (dog 1.5/1.7, cat 1.3/1.5); one growth-target calorie number in picker and saved goal; dog and cat weight-loss pace bands; completed-month age; large-breed maturity 18 months; dog growth rows under 3 months removed; calcium to phosphorus ratio check.

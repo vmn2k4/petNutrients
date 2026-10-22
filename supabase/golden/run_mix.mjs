@@ -1,5 +1,5 @@
 // node supabase/golden/run_mix.mjs  -> checks analyseMix() and dietKcal() with hand-worked numbers (USDA values per 100 g)
-import { analyseMix, dietKcal, dietItemKcal, unitKcalOfFood, nutrientTargets } from '../../prototype/js/domain.js';
+import { analyseMix, dietKcal, dietItemKcal, unitKcalOfFood, estimateKcal, foodUnitKcal, nutrientTargets } from '../../prototype/js/domain.js';
 import { INGREDIENTS } from '../../prototype/js/ingredients-data.js';
 
 const targets = nutrientTargets({ species: 'dog', birth: '2020-01-01', weightKg: 20, bcs: 5, sizeCat: 'IV' });
@@ -39,4 +39,16 @@ check('cups without calories are not counted', dietItemKcal({ unit: 'cup', amoun
 // the diet total uses each item's own measure and leaves supplements out
 const mixed = dietKcal([{ unit: 'cup', amount: 2, timesPerDay: 2, kcalPerUnit: 190, role: 'main', foodName: 'a' }, { unit: 'g', amount: 100, timesPerDay: 2, kcalPerKg: 1500, role: 'main', foodName: 'b' }, { unit: 'scoop', amount: 1, timesPerDay: 1, role: 'supplement', foodName: 'c' }, { unit: 'cup', amount: 1, timesPerDay: 1, role: 'main', foodName: 'd' }], () => null);
 check('mixed diet total', mixed.kcal === 1060 && mixed.known === 2 && mixed.unknown === 1 && mixed.supplements === 1 && mixed.uncounted[0] === 'd', mixed);
+
+// No maker calories: worked out from the label analysis (modified Atwater, scaled by food type), with a margin, never over the maker's number.
+// ACANA Grasslands (retailer listing: 37% protein, 18% fat, 10% moisture); the maker's own listing says 3,850 to 3,930 kcal/kg.
+const est = estimateKcal({ format: 'dry', protein: 37, fat: 18, moisture: 10 });
+check('estimate for a dry food is close to the maker figure', est && est.kcalPerKg >= 3700 && est.kcalPerKg <= 4000 && est.margin === 8 && est.assumed.includes('ash'), est);
+check('wet foods carry a wider margin', estimateKcal({ format: 'wet', protein: 9, fat: 5, moisture: 78 }).margin === 25);
+check('a label that does not add up gets no estimate', estimateKcal({ format: 'dry', protein: 60, fat: 40, moisture: 30 }) === null);
+check('no estimate without protein, fat and moisture', estimateKcal({ format: 'dry', protein: 30, fat: 15 }) === null);
+check('the maker figure always wins over the estimate', foodUnitKcal('g', { format: 'dry', kcalPerKg: 3500, protein: 37, fat: 18, moisture: 10 }).source === 'label');
+const fu = foodUnitKcal('g', { format: 'dry', protein: 37, fat: 18, moisture: 10 }); check('per gram from the estimate', fu && fu.source === 'estimate' && fu.per > 3.7 && fu.per < 4.0, fu);
+check('a cup needs grams per cup for an estimate', foodUnitKcal('cup', { format: 'dry', protein: 37, fat: 18, moisture: 10 }) === null);
+const di = dietItemKcal({ unit: 'g', amount: 100, timesPerDay: 2, role: 'main' }, { format: 'dry', protein: 37, fat: 18, moisture: 10 }); check('diet item uses the estimate and says so', di && di.source === 'estimate' && di.margin === 8 && Math.round(di.perDay) > 740 && Math.round(di.perDay) < 800, di);
 console.log(`${bad ? 'FAILED' : 'all'} mix builder checks ${bad ? bad + ' failed' : 'pass'}`); process.exit(bad ? 1 : 0);

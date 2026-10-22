@@ -1,13 +1,17 @@
 import { listFoods, getPet, updatePet, isSignedIn, getQuickPet, setQuickPet, setGoal, getGoalHistory } from '../store.js';
-import { weightCheck, weightLossKcal, NUTRIENTS, NUTRIENT_HELP, GOALS, goalsFor, goalPlan, goalMatch, suggestDays, per1000, energyPlan, nutrientTargets, foodFit, costPerDay, gramsPerDay, round, lifeStage, rer, ageInMonths, targetBounds, allergenHits, ALLERGENS, SIZE_CATEGORIES, breedSize, lbToKg, effectiveGoal, goalProgress, fmtDay, todayStr, addDaysStr } from '../domain.js';
-import { card, badge, verdictBadge, stars, button, icon, esc, pageHead, emptyState, choiceGroup, selectField, field, expNote, comboField, mountCombos, sizeBlock, bindBreedSize } from '../ui.js';
-import { toast } from '../sheet.js';
+import { brandGuide, weightCheck, weightLossKcal, NUTRIENTS, NUTRIENT_HELP, GOALS, goalsFor, goalPlan, goalMatch, suggestDays, per1000, energyPlan, nutrientTargets, foodFit, costPerDay, gramsPerDay, round, lifeStage, rer, ageInMonths, targetBounds, allergenHits, ALLERGENS, SIZE_CATEGORIES, breedSize, lbToKg, effectiveGoal, goalProgress, fmtDay, todayStr, addDaysStr } from '../domain.js';
+import { KCAL_NOTE, foodPic, card, badge, verdictBadge, verdictBanner, stars, button, icon, esc, pageHead, emptyState, choiceGroup, selectField, field, expNote, comboField, mountCombos, sizeBlock, bindBreedSize } from '../ui.js';
+import { toast, openSheet } from '../sheet.js';
+import { listTreats, listSupplements } from '../store.js';
+import { treatPlan, treatFit, ingredientWarnings, TOXIC_TERMS } from '../domain.js';
+import { openAddItem } from '../diet.js';
+import { notice } from '../ui.js';
 import { bindQuickWeight } from '../quickweight.js';
 import { chartKind } from '../petcharts.js';
 import { targetPickerHtml, mountTargetPicker } from '../targetpicker.js';
 import { DOG_BREEDS } from '../reference.js';
 
-const VERDICT_TEXT = { good: 'Good fit', caution: 'Check details', bad: 'Not a fit' };
+const VERDICT_TEXT = { good: 'Meets targets', caution: 'Check details', bad: 'Not a fit' };
 const ORDER = { good: 0, caution: 1, bad: 2 };
 const DAYS = [30, 60, 90, 120, 180, 270, 365];
 const fmt = (n, d = 1) => (n == null ? 'not reported' : n.toFixed(d));
@@ -18,8 +22,8 @@ export function foodCard(food, ctx) {
   const g = kcal ? gramsPerDay(food, kcal) : null; const c = kcal ? costPerDay(food, kcal) : null;
   const p = NUTRIENTS[0].get(food); const f = NUTRIENTS[1].get(food);
   const m = ctx.match?.get(food.id);
-  return card(`
-    <div class="fc__img"><img src="${food.img}" alt="" width="600" height="600" loading="lazy"></div>
+  const inner = `
+    <div class="fc__img">${foodPic(food)}</div>
     <div class="row row--between">${fit ? verdictBadge(fit.verdict, VERDICT_TEXT[fit.verdict]) : badge(isSignedIn() ? 'Create a profile for fit' : 'Add your pet for fit')}${m?.top ? badge('Top pick for this goal', 'good', 'star') : badge(food.format, 'info')}</div>
     <h3 class="card__title" style="margin-top:var(--space-3)">${esc(food.name)}</h3>
     <p class="muted small" style="margin:0">${esc(food.brand)}, ${food.species}</p>
@@ -33,8 +37,12 @@ export function foodCard(food, ctx) {
       const amt = (v) => (v == null ? 'not reported' : `<strong>${Math.round(v * k)} g</strong>`);
       return `<div><span class="muted">Protein</span><br>${amt(p)} <span class="muted">${tail}</span></div><div><span class="muted">Fat</span><br>${amt(f)} <span class="muted">${tail}</span></div>${grams ? `<div><span class="muted">${kcal ? 'Per day' : 'That is'}</span><br><strong>${Math.round(grams)} g</strong> <span class="muted">of food</span></div>` : ''}${food.kcalPerKg ? `<div><span class="muted">Energy</span><br><strong>${Math.round(food.kcalPerKg / 10)}</strong> kcal/100 g</div>` : ''}${c ? `<div><span class="muted">Cost</span><br><strong>$${c.toFixed(2)}</strong>/day</div>` : ''}`;
     })()}</div>
+    ${(() => { const bg = ctx.pet ? brandGuide(food, ctx.pet.weightKg) : null;
+      return bg && !bg.covers ? `<p class="small muted" style="margin:var(--space-2) 0 0">The maker's table (${esc(bg.row.weight_label)}) does not cover ${Math.round(ctx.pet.weightKg * 10) / 10} kg. Check the bag.</p>` : bg ? `<p class="small" style="margin:var(--space-2) 0 0"><span class="muted">Maker's guide for ${esc(bg.row.weight_label)}:</span> <strong>${bg.grams ? `${Math.round(bg.grams[0])}${bg.grams[1] !== bg.grams[0] ? ` to ${Math.round(bg.grams[1])}` : ''} g a day` : esc(bg.text)}</strong></p>` : ''; })()}
     ${fit && fit.warn.length ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-${fit.warn[0].level === 'bad' ? 'bad' : 'caution'})">${icon(fit.warn[0].level === 'bad' ? 'x' : 'alert')} ${esc(fit.warn[0].text)}</p>` : ''}
-  `, { href: `/food/${food.id}` });
+  `;
+  const buy = food.buyUrl ? `<a class="fc__buy" href="${esc(food.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${food.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(food.buyRetailer || 'a retailer')}</span></a>` : '';
+  return `<div class="fcwrap">${card(inner, { href: `/food/${food.id}` })}${buy}</div>`;
 }
 
 // The pet this page works with: the saved profile, or a logged-out visitor's quick details (this tab only).
@@ -45,7 +53,7 @@ export const makeCtx = () => {
 };
 
 // ---- state ------------------------------------------------------------------------------------
-const state = { species: null, stage: null, include: true, sort: 'fit', quick: new Set(), priority: new Set(), unit: 'label', targets: { label: {}, kcal: {} }, targetsOpen: false, moreOpen: false, preset: null, chartOpen: false, needs: new Set(), hideAllergy: true };
+const state = { kind: 'food', xq: '', xsort: 'budget', xtype: 'all', xhide: true, xshown: 48, species: null, stage: null, include: true, sort: 'fit', quick: new Set(), priority: new Set(), unit: 'label', targets: { label: {}, kcal: {} }, targetsOpen: false, moreOpen: false, preset: null, chartOpen: false, needs: new Set(), hideAllergy: true };
 let goal = null; // {type, targetKg, days, kcalOverride?} for the current pet
 let goalOpen = true; // open while choosing; collapses to one line so the foods are visible
 const kcalFor = (pet) => (goal?.kcalOverride != null ? Math.max(goal.kcalOverride, goal.type === 'lose' ? Math.round(weightLossKcal(pet, goal.targetKg)) : 0) : goalPlan(pet, goal).kcal); // an old override can never go below the safe level
@@ -55,6 +63,9 @@ const withKcal = (c) => { if (c.pet && goal) c.goalKcal = kcalFor(c.pet); return
 const QUICK = [
   { id: 'dry', label: 'Dry food', test: (f) => f.format === 'dry' },
   { id: 'wet', label: 'Wet food', test: (f) => f.format === 'wet' },
+  { id: 'kcal', label: 'Calories on label', test: (f) => f.kcalPerKg != null },
+  { id: 'ca', label: 'Sold in Canada', test: (f) => (f.markets || []).includes('CA') },
+  { id: 'us', label: 'Sold in the US', test: (f) => (f.markets || []).includes('US') },
   { id: 'budget', label: 'Under $2 a day', test: (f, ctx) => { const c = costPerDay(f, ctx.goalKcal || ctx.plan?.kcal || 1000); return c != null && c <= 2; } },
 ];
 // Extras the owner can ask for. These are filters ("must contain"), matched on ingredients or the declared extras.
@@ -168,8 +179,8 @@ function targetsHtml(ctx, species) {
     ${preset ? `<div class="notice" role="note">${icon('info')}<div><strong>${preset.label}.</strong> ${esc(preset.why(species))} You can change any number below.</div></div>` : '<span class="hint">One tap fills sensible numbers. Then change any of them.</span>'}</div>`;
   const calories = pet && !energyPlan(pet).hideKcal ? (() => {
     const kb = kcalBounds(pet, goal); const sug = goalPlan(pet, goal).kcal; const cur = goal.kcalOverride ?? sug;
-    return `<div class="trow trow--cal"><div class="trow__head"><strong>Daily calories</strong><span class="hint">We suggest ${sug} for ${esc(pet.name)}.${goal.kcalOverride != null ? ' You changed it.' : ''}</span></div>
-      <div class="trow__ctl"><input type="range" aria-label="Daily calories slider" min="${kb.lo}" max="${kb.hi}" step="10" value="${cur}" data-kcal-range><input class="input num" id="kcal-in" type="number" inputmode="numeric" aria-label="Daily calories" min="${kb.lo}" max="${kb.hi}" step="10" value="${cur}" data-kcal-num><span class="unit">kcal a day</span></div>
+    return `<div class="trow trow--cal"><div class="trow__head"><strong>Daily energy (kcal)</strong><span class="hint">We suggest ${sug} for ${esc(pet.name)}.${goal.kcalOverride != null ? ' You changed it.' : ''}</span></div>
+      <div class="trow__ctl"><input type="range" aria-label="Daily kcal slider" min="${kb.lo}" max="${kb.hi}" step="10" value="${cur}" data-kcal-range><input class="input num" id="kcal-in" type="number" inputmode="numeric" aria-label="Daily kcal" min="${kb.lo}" max="${kb.hi}" step="10" value="${cur}" data-kcal-num><span class="unit">kcal a day</span></div>
       <div class="hint" id="kcal-msg" aria-live="polite">${goal.kcalOverride != null ? `<button type="button" class="btn btn--ghost btn--small" data-kcal-reset>Use our suggestion (${sug})</button>` : `${kb.safe ? `We will not go below the safe level of ${kb.safe} kcal a day for this goal. ` : ''}Allowed range ${kb.lo} to ${kb.hi}.`}</div></div>`;
   })() : '';
   const rows = TG.filter((T) => tgGet(T, mode)).map((T) => {
@@ -227,8 +238,8 @@ function summary(ctx) {
   const odd = bb && lifeStage(ctx.pet) === 'adult' && (goal.type === 'lose' || goal.type === 'gain') && (goal.targetKg < bb.min * 0.9 || goal.targetKg > bb.max * 1.1);
   const breedNote = odd ? `${round(goal.targetKg, 1)} kg is outside the usual range for a ${ctx.pet.breed} (${round(bb.min, 1)} to ${round(bb.max, 1)} kg). Please check with your vet.` : '';
   const warn = gp.pace.state !== 'good' ? `<div class="goalsum__pace">${badge(gp.pace.text, gp.pace.state, gp.pace.state === 'caution' ? 'alert' : 'x')}</div>` : '';
-  return `<div class="goalsum__stats"><div class="stat"><div class="stat__value">${kc.toLocaleString('en-US')}</div><div class="stat__label">required calories a day${goal.kcalOverride != null ? ' (your number)' : ''}</div></div><div class="stat"><div class="stat__value">${round(gp.targetKg, 1)} kg</div><div class="stat__label">${tgt}</div></div></div>
-    ${warn}${gp.note ? `<p class="hint" style="margin:var(--space-2) 0 0">${esc(gp.note)}</p>` : ''}<p class="hint" style="margin:var(--space-2) 0 0">These calories are approximate. Please check them with your vet before you change what ${esc(ctx.pet.name)} eats.</p>${breedNote ? `<p class="hint" style="margin:var(--space-2) 0 0">${esc(breedNote)}</p>` : ''}`;
+  return `<div class="goalsum__stats"><div class="stat"><div class="stat__value">${kc.toLocaleString('en-US')}</div><div class="stat__label">kcal a day${goal.kcalOverride != null ? ' (your number)' : ''}</div></div><div class="stat"><div class="stat__value">${round(gp.targetKg, 1)} kg</div><div class="stat__label">${tgt}</div></div></div>
+    ${gp.vetWarning ? verdictBanner('caution', 'Check with your vet first', esc(gp.vetWarning)) : ''}${warn}${gp.note ? `<p class="hint" style="margin:var(--space-2) 0 0">${esc(gp.note)}</p>` : ''}<p class="hint" style="margin:var(--space-2) 0 0">${KCAL_NOTE} (kcal are the "Calories" on food labels.)</p>${breedNote ? `<p class="hint" style="margin:var(--space-2) 0 0">${esc(breedNote)}</p>` : ''}`;
 }
 
 // The same chart and controls as the Growth tab, tucked in a collapsible section of the goal card.
@@ -244,10 +255,10 @@ function goalLine(pet) {
   const gp = goalPlan(pet, goal); const g = GOALS.find((x) => x.id === goal.type); const kc = kcalFor(pet);
   const saved = getPet()?.goal ? effectiveGoal(getPet()) : null;
   const date = saved?.targetDate || addDaysStr(todayStr(), gp.days); const left = saved ? saved.daysLeft : gp.days; const dateTxt = `by ${fmtDay(date)} (${left} days left)`;
-  const short = goal.type === 'maintain' ? `Keep weight steady ${dateTxt}, ${kc} required calories a day` : goal.type === 'grow' && !goal.custom ? `Expected ${round(gp.targetKg, 1)} kg ${dateTxt}, ${kc} required calories a day` : `${round(saved ? saved.startKg : pet.weightKg, 1)} to ${round(gp.targetKg, 1)} kg ${dateTxt}, ${kc} required calories a day`;
+  const short = goal.type === 'maintain' ? `Keep weight steady ${dateTxt}, ${kc} kcal a day` : goal.type === 'grow' && !goal.custom ? `Expected ${round(gp.targetKg, 1)} kg ${dateTxt}, ${kc} kcal a day` : `${round(saved ? saved.startKg : pet.weightKg, 1)} to ${round(gp.targetKg, 1)} kg ${dateTxt}, ${kc} kcal a day`;
   const pr = saved ? goalProgress(getPet(), saved) : null;
   const prBadge = pr ? (saved.expired ? badge('Goal date reached', 'caution') : badge(pr.text, { on_track: 'good', ahead: 'good', behind: 'caution', no_data: '' }[pr.state])) : '';
-  return `<div class="goalline__title"><strong>Goal: ${g.label.toLowerCase()}</strong>${prBadge}${gp.pace.state && gp.pace.state !== 'good' ? badge(gp.pace.text, gp.pace.state) : ''}</div><div class="muted small">${short}</div>`;
+  return `<div class="goalline__title"><strong>Goal: ${g.label.toLowerCase()}</strong>${prBadge}${gp.pace.state && gp.pace.state !== 'good' ? badge(gp.pace.text, gp.pace.state) : ''}</div><div class="muted small">${short}</div>${gp.vetWarning ? `<div style="margin-top:var(--space-3)">${verdictBanner('caution', 'Check with your vet first', esc(gp.vetWarning))}</div>` : ''}`;
 }
 
 // Quick details for visitors who are not signed in: enough to rank foods for their pet, nothing is saved.
@@ -343,8 +354,91 @@ const chipsHtml = (pet, ctx, species) => {
     <li><strong>Calcium, phosphorus and the rest.</strong> We check these against your pet's needs for you, so you never have to choose them.</li></ul></details></div></details>`;
 };
 
+
+// ---- treats and supplements in Find food ----------------------------------------------------------
+const TYPE_LABEL = { biscuit: 'Biscuit', jerky: 'Jerky', 'dental chew': 'Dental chew', 'soft chew': 'Soft chew', 'freeze-dried': 'Freeze-dried', 'lickable/puree': 'Lickable', 'long-lasting chew': 'Long-lasting chew', 'training treat': 'Training treat', other: 'Other' };
+const typeLabel = (t) => TYPE_LABEL[t] || 'Treat';
+const KINDS = [['food', 'Foods'], ['treat', 'Treats'], ['supplement', 'Supplements']];
+const fmtn = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US');
+const energyOf = (t) => (t.kcalPerTreat ? `${fmtn(t.kcalPerTreat)} kcal per ${esc(t.kcalPerTreatUnit || 'treat')}` : t.kcalPerKg ? `${Math.round(t.kcalPerKg / 10)} kcal per 100 g` : 'Calories not stated');
+const treatDay = (t, pet, kcal) => {
+  if (!pet) return { text: 'Add your pet to see how many fit in a day', strong: false };
+  if (kcal == null) return { text: 'Ask your vet how many', strong: false };
+  const p = treatPlan(t, pet, kcal);
+  if (p.count != null) return { text: p.count >= 1 ? `Up to ${p.count} a day${p.limitedBy === 'label' ? ' (label limit)' : ''}` : 'One is more than 10% of the day', strong: true };
+  if (p.grams != null) return { text: `About ${Math.round(p.grams)} g a day`, strong: true };
+  return { text: 'Energy not stated, so we cannot count it', strong: false };
+};
+const kcalOfPet = (pet) => { if (!pet) return null; const pl = energyPlan(pet); return pl.hideKcal ? null : Math.round(pl.kcal); };
+const addBtn = (id, kind) => (isSignedIn() ? button({ label: 'Add to diet', variant: 'primary btn--small', iconName: 'plus', attrs: `data-add="${id}" data-kind="${kind}"` }) : button({ label: 'Add to diet', variant: 'primary btn--small', iconName: 'plus', attrs: 'data-signup data-then="/foods"' }));
+
+function treatCard(t, pet, kcal) {
+  const fit = pet ? treatFit(t, pet) : null; const day = treatDay(t, pet, kcal);
+  const buy = t.buyUrl ? `<a class="fc__buy" href="${esc(t.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${t.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(t.buyRetailer || 'a retailer')}</span></a>` : '';
+  return `<div class="fcwrap">${card(`<div class="fc__img">${foodPic(t)}</div>
+    <div class="row row--between">${fit ? verdictBadge(fit.verdict, { good: 'No ingredient problems', caution: 'Check details', bad: 'Not a match' }[fit.verdict]) : badge('Add your pet to check')}${badge(typeLabel(t.treatType), 'info')}</div>
+    <h3 class="card__title" style="margin-top:var(--space-3)">${esc(t.name)}</h3><p class="muted small" style="margin:0">${esc(t.brand)}, ${esc(t.species)}</p>
+    <div class="fc__stats small"><div><span class="muted">Energy</span><br><strong>${energyOf(t)}</strong></div><div><span class="muted">${pet ? 'Per day' : 'In a day'}</span><br>${day.strong ? `<strong>${esc(day.text)}</strong>` : esc(day.text)}</div></div>
+    ${fit && fit.warn.length ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-${fit.warn[0].level === 'bad' ? 'bad' : 'caution'})">${icon(fit.warn[0].level === 'bad' ? 'x' : 'alert')} ${esc(fit.warn[0].text)}</p>` : ''}
+    <div class="row" style="margin-top:var(--space-3)">${button({ label: 'Details', variant: 'secondary btn--small', attrs: `data-tdetail="${t.id}" type="button"` })}${addBtn(t.id, 'treat')}</div>`, { flat: false })}${buy}</div>`;
+}
+
+function supplementCard(s) {
+  return `<div class="fcwrap">${card(`<h3 class="card__title">${esc(s.name)}</h3><p class="muted small" style="margin:0">${esc(s.brand)}${s.species ? `, ${esc(s.species)}` : ''}</p>
+    <p class="small muted" style="margin:var(--space-3) 0">Listed in the diet, not counted in calories. Ask your vet before starting one.</p><div class="row">${addBtn(s.id, 'supplement')}</div>`)}</div>`;
+}
+
+function extraResults(ctx) {
+  const pet = ctx.pet; const species = pet?.species || 'dog'; const q = state.xq.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const match = (x) => q.every((w) => `${x.brand} ${x.name}`.toLowerCase().includes(w));
+  if (state.kind === 'supplement') {
+    const list = listSupplements().filter((s) => (!s.species || s.species === species) && match(s));
+    if (!listSupplements().length) return emptyState({ img: 'cut-beagle', title: 'Supplements are coming', text: 'We are adding supplements to this list. You can already add one by name on the Diet page.' });
+    return list.length ? `<p class="muted small" aria-live="polite">${list.length} supplement${list.length === 1 ? '' : 's'}</p><div class="grid grid--auto">${list.slice(0, state.xshown).map(supplementCard).join('')}</div>` : emptyState({ img: 'cut-beagle', title: 'No supplements match', text: 'Try fewer words.' });
+  }
+  if (species === 'cat') return emptyState({ img: 'cut-cat', title: 'No cat treats yet', text: 'We only have dog treats so far. Cat treats are coming.' });
+  const kcal = kcalOfPet(pet);
+  let list = listTreats().filter((t) => t.species === species && (state.xtype === 'all' || t.treatType === state.xtype) && match(t));
+  if (pet && state.xhide) list = list.filter((t) => !allergenHits(t, pet).length);
+  const count = (t) => treatPlan(t, pet, kcal).count;
+  const by = { budget: (a, b) => (count(b) ?? -1) - (count(a) ?? -1), calories: (a, b) => (a.kcalPerTreat ?? 1e9) - (b.kcalPerTreat ?? 1e9), name: (a, b) => `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`) };
+  list.sort(by[state.xsort === 'budget' && !(pet && kcal) ? 'calories' : state.xsort] || by.name);
+  if (!list.length) return emptyState({ img: 'cut-beagle', title: 'No treats match', text: 'Try another type, or clear the search.' });
+  return `<h2 class="sr-only">Treat results</h2><p class="muted small" aria-live="polite">${list.length} treat${list.length === 1 ? '' : 's'}${pet ? ` for ${esc(pet.name)}` : ''}. Treats are best kept to about 10% of a day's calories, all together.</p>
+    <div class="grid grid--auto">${list.slice(0, state.xshown).map((t) => treatCard(t, pet, kcal)).join('')}</div>
+    ${list.length > state.xshown ? `<div style="margin-top:var(--space-5);text-align:center">${button({ label: `Show more (${list.length - state.xshown} left)`, variant: 'secondary', attrs: 'id="xmore" type="button"' })}</div>` : ''}`;
+}
+
+function extraHtml(ctx) {
+  const types = ['all', ...new Set(listTreats().map((t) => t.treatType).filter(Boolean))];
+  return `<div class="stack">${ctx.pet ? '' : notice('Add your pet to check ingredients against allergies and to see how many treats fit in a day.', 'info')}
+    <div class="grid grid--3"><div class="field"><label for="xq">Search</label><input class="input" id="xq" type="search" value="${esc(state.xq)}" placeholder="Brand or name" autocomplete="off"></div>
+      <div class="field" id="xs-f" ${state.kind === 'treat' ? '' : 'hidden'}><label for="xs">Sort by</label><select class="select" id="xs">${[['budget', 'Most treats a day'], ['calories', 'Fewest calories per treat'], ['name', 'Name']].map(([v, l]) => `<option value="${v}" ${state.xsort === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      ${ctx.pet && state.kind === 'treat' ? `<label class="switch" style="align-self:end"><input type="checkbox" id="xh" ${state.xhide ? 'checked' : ''}><span class="switch__ui" aria-hidden="true"></span><span class="small">Hide treats with ${esc(ctx.pet.name)}'s allergens</span></label>` : ''}</div>
+    <div class="row" id="xtypes" role="group" aria-label="Treat type" ${state.kind === 'treat' ? '' : 'hidden'}>${types.map((v) => `<button type="button" class="chipbtn chipbtn--toggle" data-xtype="${esc(v)}" aria-pressed="${state.xtype === v}">${v === 'all' ? 'All' : typeLabel(v)}</button>`).join('')}</div>
+    <div id="xres">${extraResults(ctx)}</div></div>`;
+}
+
+function treatSheet(t, ctx) {
+  const pet = ctx.pet; const kcal = kcalOfPet(pet); const p = pet ? treatPlan(t, pet, kcal) : null; const fit = pet ? treatFit(t, pet) : null;
+  const flagged = (ing) => TOXIC_TERMS.some((x) => (!x.species || x.species === t.species) && ing.toLowerCase().includes(x.term)) || (!!pet && allergenHits({ ingredients: [ing] }, pet).length > 0);
+  const lines = [];
+  if (p && kcal != null) {
+    lines.push(`Treats are best kept to about 10% of a day, <strong>${Math.round(p.budgetKcal)} kcal</strong> of ${esc(pet.name)}'s ${kcal.toLocaleString('en-US')}, for all treats together.`);
+    if (p.byBudget != null) lines.push(`At ${fmtn(p.perTreat)} kcal each, that is up to <strong>${p.byBudget}</strong> by the 10% rule.`); else if (p.grams != null) lines.push(`That is about <strong>${Math.round(p.grams)} g</strong> a day.`);
+    if (p.labelMax != null) lines.push(`The label allows up to <strong>${p.labelMax}</strong> a day at ${fmtn(pet.weightKg)} kg. We use the lower number.`); else if (p.bandsNotCovering) lines.push(`The label has a weight table that does not cover ${fmtn(pet.weightKg)} kg, so check the bag for its own limit.`);
+  }
+  const body = `<div class="stack">${fit ? `<p class="small" style="margin:0;color:var(--color-${fit.verdict === 'bad' ? 'bad' : fit.verdict === 'caution' ? 'caution' : 'good'})">${fit.warn.length ? esc(fit.warn.map((w) => w.text).join(' ')) : 'No unsafe ingredients or listed allergens found. We cannot check how it is made, so read the bag.'}</p>` : ''}
+    <p style="margin:0"><strong>${energyOf(t)}</strong>${t.gramsPerTreat ? ` · about ${fmtn(t.gramsPerTreat)} g each` : ''} · ${esc(typeLabel(t.treatType))}</p>
+    ${lines.map((l) => `<p class="small" style="margin:0">${l}</p>`).join('')}${t.treatFeedingText ? `<p class="small" style="margin:0"><span class="muted">Label says:</span> ${esc(t.treatFeedingText)}</p>` : ''}
+    <div class="chips">${t.ingredients.length ? t.ingredients.map((i) => badge(i, flagged(i) ? 'bad' : '', flagged(i) ? 'alert' : '')).join('') : '<span class="muted small">Ingredients not in our data. Check the bag.</span>'}</div>
+    <p class="hint" style="margin:0">Ingredient lists are copied from the maker's website or label and are not always complete or marked correctly. Flags only match the words listed here. Always read the ingredient list on the bag before you feed it. Treats are not complete meals. ${esc(KCAL_NOTE)}</p>
+    <div class="row">${addBtn(t.id, 'treat')}${t.buyUrl ? button({ label: `${t.buyType === 'search' ? 'Search at' : 'Buy at'} ${t.buyRetailer || 'a retailer'}`, href: t.buyUrl, variant: 'secondary', iconName: 'cart', attrs: 'target="_blank" rel="noopener noreferrer sponsored"' }) : ''}</div></div>`;
+  openSheet({ title: `${t.brand} ${t.name}`, body, onMount: (el, close) => { el.querySelector('[data-add]')?.addEventListener('click', () => { if (isSignedIn() && getPet()) { close(); openAddItem(getPet(), 'treat', t, () => {}); } }); } });
+}
+
 export function render() {
-  if (location.search) { const q = new URLSearchParams(location.search); state.species = q.get('species') || state.species; state.stage = q.get('stage'); }
+  if (location.search) { const q = new URLSearchParams(location.search); state.species = q.get('species') || state.species; state.stage = q.get('stage'); if (['food', 'treat', 'supplement'].includes(q.get('kind'))) state.kind = q.get('kind'); }
   const ctx = makeCtx();
   if (ctx.pet) { goal = ctx.pet.goal && goalsFor(ctx.pet).some((g) => g.id === ctx.pet.goal.type) ? { ...effectiveGoal(ctx.pet) } : defaultGoal(ctx.pet, ctx.plan); ctx.goalKcal = kcalFor(ctx.pet); } else goal = null;
   goalOpen = !ctx.pet; // with a pet the goal starts as a slim bar; "Change goal" opens the form
@@ -354,6 +448,8 @@ export function render() {
   return {
     title: 'Dog & Cat Food Compared by Fit and Cost per Day',
     html: `${pageHead('Find their food')}<div class="page">${expNote()}
+      <div class="row" style="margin-bottom:var(--space-4)" role="group" aria-label="What are you looking for">${KINDS.map(([v, l]) => `<button type="button" class="chipbtn chipbtn--toggle" data-kind-tab="${v}" aria-pressed="${state.kind === v}">${l}</button>`).join('')}</div>
+      <div id="foodview" ${state.kind === 'food' ? '' : 'hidden'}>
       <div id="goalbox" style="margin-bottom:var(--space-4)">${goalBox(ctx)}</div>
       ${ctx.pet && !getPet() ? `<div style="margin-bottom:var(--space-4)">${quickBanner(ctx.pet)}</div>` : ''}
       ${chipsHtml(ctx.pet, ctx, species)}
@@ -368,9 +464,26 @@ export function render() {
           <button class="btn btn--primary btn--block filters__done" type="button" id="fdone">Show foods</button>
         </form></aside>
         <div id="res" class="stack">${results(ctx)}</div>
-      </div></div>`,
+      </div></div>
+      <div id="extraview" ${state.kind === 'food' ? 'hidden' : ''}>${extraHtml(ctx)}</div></div>`,
     mount(root, rerender) {
       mountCombos(root);
+      // Foods / Treats / Supplements: the food view is not re-rendered, it is only hidden
+      const extraOut = () => { const x = root.querySelector('#xres'); if (x) x.innerHTML = extraResults(makeCtx()); };
+      const setKind = (k) => {
+        state.kind = k; state.xshown = 48; root.querySelector('#foodview').hidden = k !== 'food'; root.querySelector('#extraview').hidden = k === 'food';
+        root.querySelectorAll('[data-kind-tab]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kindTab === k)));
+        if (k !== 'food') root.querySelector('#extraview').innerHTML = extraHtml(makeCtx());
+      };
+      root.addEventListener('click', (e) => {
+        const kt = e.target.closest('[data-kind-tab]'); if (kt) { setKind(kt.dataset.kindTab); return; }
+        const xt = e.target.closest('[data-xtype]'); if (xt) { state.xtype = xt.dataset.xtype; state.xshown = 48; root.querySelectorAll('[data-xtype]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.xtype === state.xtype))); extraOut(); return; }
+        if (e.target.closest('#xmore')) { state.xshown += 48; extraOut(); return; }
+        const td = e.target.closest('[data-tdetail]'); if (td) { const t = listTreats().find((x) => x.id === td.dataset.tdetail); if (t) treatSheet(t, makeCtx()); return; }
+        const ad = e.target.closest('[data-add]'); if (ad && isSignedIn() && getPet()) { const kind = ad.dataset.kind; const item = (kind === 'supplement' ? listSupplements() : listTreats()).find((x) => x.id === ad.dataset.add); if (item) openAddItem(getPet(), kind, item, extraOut); }
+      });
+      root.addEventListener('input', (e) => { if (e.target.id === 'xq') { state.xq = e.target.value; state.xshown = 48; extraOut(); } });
+      root.addEventListener('change', (e) => { if (e.target.id === 'xs') { state.xsort = e.target.value; extraOut(); } else if (e.target.id === 'xh') { state.xhide = e.target.checked; extraOut(); } });
       root.querySelector('#qedit')?.addEventListener('click', () => { setQuickPet(null); rerender(); });
       const qf = root.querySelector('#qform');
       if (qf) {
@@ -477,7 +590,7 @@ export function render() {
         }
         if (t.matches('[data-kcal-num]')) {
           const c = makeCtx(); const kb = kcalBounds(c.pet, goal); let v = parseFloat(t.value); if (!Number.isFinite(v)) v = goalPlan(c.pet, goal).kcal;
-          const k = Math.min(kb.hi, Math.max(kb.lo, Math.round(v))); if (k !== Math.round(v)) toast(kb.safe && Math.round(v) < kb.lo ? `Not below the safe level of ${kb.safe} calories a day` : `Kept within ${kb.lo} to ${kb.hi} calories a day`);
+          const k = Math.min(kb.hi, Math.max(kb.lo, Math.round(v))); if (k !== Math.round(v)) toast(kb.safe && Math.round(v) < kb.lo ? `Not below the safe level of ${kb.safe} kcal a day` : `Kept within ${kb.lo} to ${kb.hi} kcal a day`);
           goal.kcalOverride = k; save(); drawTargets(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd();
         }
       });

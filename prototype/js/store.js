@@ -84,7 +84,7 @@ let chain = Promise.resolve();
 const sync = (fn) => { if (!online) return; chain = chain.then(fn).catch((e) => console.warn('Sync failed, kept locally:', e.message)); };
 
 // ---------- mapping between the app's pet object and the `pets` table ----------
-const COLS = { species: 'species', name: 'name', breed: 'breed', sizeCat: 'size_cat', birth: 'birth_date', sex: 'sex', neutered: 'neutered', weightKg: 'weight_kg', bcs: 'bcs', activity: 'activity', allergies: 'allergies', health: 'health', answered: 'answered', goal: 'goal', target: 'target', skips: 'skips', remind: 'remind' };
+const COLS = { species: 'species', name: 'name', breed: 'breed', sizeCat: 'size_cat', birth: 'birth_date', sex: 'sex', neutered: 'neutered', weightKg: 'weight_kg', bcs: 'bcs', activity: 'activity', exerciseMin: 'exercise_min', allergies: 'allergies', health: 'health', answered: 'answered', goal: 'goal', target: 'target', skips: 'skips', remind: 'remind' };
 const toRow = (obj) => {
   const row = {};
   for (const [k, col] of Object.entries(COLS)) if (k in obj) row[col] = obj[k] === undefined ? null : obj[k];
@@ -173,7 +173,7 @@ export const clearPet = () => {
   sync(async () => { if (petId) await api(`pets?id=eq.${petId}`, { method: 'DELETE' }); petId = null; });
 };
 export const addWeighIn = (kg, bcs) => {
-  const pet = mem.pet; if (!pet) return null;
+  const pet = mem.pet; if (!pet || !Number.isFinite(kg) || !(kg > 0)) return null; // the screens check the range; this stops a bad number reaching the saved data
   const on = today();
   pet.logs = [...(pet.logs || []), { on, kg, bcs }]; pet.weightKg = kg; pet.bcs = bcs; save();
   sync(async () => {
@@ -191,10 +191,17 @@ const NONE = { rating: 0, reviews: 0, rebuy: 0, subscribe: 0 };
 const guess = (t) => (t || '').split(/,(?![^()]*\))/).map((x) => x.replace(/[_*]/g, '').trim().toLowerCase()).filter(Boolean).slice(0, 40);
 
 const fromCatalog = (p) => ({
-  id: p.id.replace(/-/g, '_'), img: genericImg(p.species, p.format), barcode: null, brand: p.brand, name: p.name, species: p.species, format: p.format || 'other',
-  lifeStage: p.life_stage, protein: p.protein, fat: p.fat, fibre: p.fibre, moisture: p.moisture, kcalPerKg: p.kcal_per_kg, calcium: p.calcium, phosphorus: p.phosphorus,
-  pricePerKg: null, ingredients: p.ingredients || [], extras: [], source: `${p.brand} ${p.label_country} label (check it matches your bag)`, credit: p.attribution, url: p.source_url, partialIngredients: p.ingredients_partial, ...NONE,
+  id: p.id.replace(/-/g, '_'), img: genericImg(p.species, p.format), barcode: null, brand: p.brand, name: p.name, species: p.species, format: p.format || 'other', formDetail: p.form_detail,
+  lifeStage: p.life_stage, protein: p.protein_g_100g, fat: p.fat_g_100g, fibre: p.fibre_g_100g, moisture: p.moisture_g_100g, kcalPerKg: p.kcal_per_kg, calcium: p.calcium_g_100g, phosphorus: p.phosphorus_g_100g,
+  kcalPerCup: p.kcal_per_cup, kcalPerUnit: p.kcal_per_unit, kcalUnit: p.kcal_unit, gramsPerCup: p.grams_per_cup,
+  // price is CAD from Canadian retailers only; other foods show no price rather than a guess
+  pricePerKg: p.price_per_kg_cad_min ?? null, markets: p.markets || [], madeIn: p.made_in || null, grainFree: p.grain_free, proteinSources: p.protein_sources || [], productLine: p.product_line,
+  photo: p.image_type === 'packshot' ? p.image_url : null, buyUrl: p.buy_url, buyType: p.buy_url_type, buyRetailer: p.buy_retailer, ingredients: p.ingredients || [],
+  extras: [p.probiotics && 'probiotics', p.glucosamine_chondroitin && 'glucosamine', p.collagen_added && 'collagen', p.omega3_source && 'omega3'].filter(Boolean),
+  source: `${p.brand} ${p.label_country} label (check it matches your bag)`, credit: p.attribution, url: p.source_url, partialIngredients: p.ingredients_partial, ...NONE,
 });
+const fromTreat = (p) => ({ ...fromCatalog(p), isTreat: true, treatType: p.treat_type, kcalPerTreat: p.kcal_per_treat, kcalPerTreatUnit: p.kcal_per_treat_unit, gramsPerTreat: p.grams_per_treat,
+  treatFeedingText: p.treat_feeding_text, treatBands: Array.isArray(p.treat_feeding_bands) ? p.treat_feeding_bands : [], completeAndBalanced: p.complete_and_balanced, vohc: !!p.vohc_seal });
 // Open Pet Food Facts rows are crowd-sourced and their nutrient numbers are often wrong (per serving, mistyped), so they are used
 // for barcode lookup only (name, brand, ingredients, picture) and never for ranking or fit.
 const fromOpff = (p) => {
@@ -208,16 +215,39 @@ const fromOpff = (p) => {
   };
 };
 const pub = async (schema, path) => {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Accept-Profile': schema }, signal: AbortSignal.timeout(8000) });
-  if (!r.ok) throw new Error(`${schema}.${path}: ${r.status}`);
-  return r.json();
+  const out = [];
+  for (let from = 0; ; from += 1000) { // PostgREST returns at most 1000 rows a request, so the catalogue is read a page at a time
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Accept-Profile': schema, Range: `${from}-${from + 999}`, 'Range-Unit': 'items' }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`${schema}.${path}: ${r.status}`);
+    const rows = await r.json(); out.push(...rows);
+    if (rows.length < 1000) return out;
+  }
 };
 let liveFoods = null; // null = could not load (offline): the invented sample foods are shown instead
+let liveSupplements = []; // supplements, once they are in the catalogue (product_type = 'supplement'); empty until then
+let liveTreats = []; // dog treats, chews and lickables (product_type = 'treat'); empty when they could not load
 async function loadFoods() {
   if (!SUPABASE_URL) return;
-  const cols = 'id,brand,name,species,format,life_stage,kcal_per_kg,protein,fat,fibre,moisture,calcium,phosphorus,ingredients,ingredients_partial,label_country,source_url,attribution';
-  const cat = await pub('catalog', `products?select=${cols}&prescription=is.false&life_stage=neq.unknown&kcal_per_kg=not.is.null&protein=not.is.null&fat=not.is.null&order=name`);
+  const cols = 'id,brand,name,species,format,form_detail,life_stage,kcal_per_kg,kcal_per_cup,kcal_per_unit,kcal_unit,grams_per_cup,protein_g_100g,fat_g_100g,fibre_g_100g,moisture_g_100g,calcium_g_100g,phosphorus_g_100g,ingredients,ingredients_partial,protein_sources,grain_free,probiotics,glucosamine_chondroitin,collagen_added,omega3_source,markets,made_in,product_line,price_per_kg_cad_min,buy_url,buy_url_type,buy_retailer,image_url,image_type,label_country,source_url,attribution';
+  // foods only (treats live in the same table, product_type = 'treat'), not retired, not prescription; unknown life stage is kept (the fit check flags it); a food needs an ingredient list (allergy matching) and protein and fat. Calories may be blank: those foods show "calories not reported".
+  const cat = await pub('catalog', `products?select=${cols}&product_type=eq.food&retired=is.false&prescription=is.false&protein_g_100g=not.is.null&fat_g_100g=not.is.null&ingredients=not.eq.{}&order=name,id`);
   liveFoods = cat.map(fromCatalog);
+  // the maker's own feeding table (per weight band), parsed from the label; only some foods have one
+  const gcols = 'product_id,weight_label,weight_kg_min,weight_kg_max,amount_min,amount_max,unit,grams_per_day_min,grams_per_day_max,kcal_per_day_mid,source_url';
+  const guides = await pub('catalog', `feeding_guides?select=${gcols}&order=product_id,weight_kg_max`).catch(() => []);
+  const byId = new Map();
+  for (const g of guides) { const k = g.product_id.replace(/-/g, '_'); (byId.get(k) || byId.set(k, []).get(k)).push(g); }
+  for (const f of liveFoods) f.guide = byId.get(f.id) || [];
+  // Treats live in the same table. They stay retired = true in the database so older versions of the app, whose food query has no
+  // product_type filter, never list them as foods; this query asks for them by type and ignores `retired`.
+  try {
+    const tcols = `${cols},treat_type,kcal_per_treat,kcal_per_treat_unit,grams_per_treat,treat_feeding_text,treat_feeding_bands,complete_and_balanced,vohc_seal`;
+    liveTreats = (await pub('catalog', `products?select=${tcols}&product_type=eq.treat&prescription=is.false&order=name,id`)).map(fromTreat);
+  } catch (e) { console.warn('Treats unavailable.', e.message); liveTreats = []; }
+  // Supplements are being added to the catalogue. Until there are rows this is empty and the diet page offers its built-in list.
+  try {
+    liveSupplements = (await pub('catalog', `products?select=id,brand,name,species&product_type=eq.supplement&order=name,id`)).map((p) => ({ id: p.id.replace(/-/g, '_'), brand: p.brand, name: p.name, species: p.species }));
+  } catch (e) { liveSupplements = []; }
 }
 try { await loadFoods(); } catch (e) { console.warn('Foods unavailable, showing sample foods.', e.message); }
 
@@ -232,8 +262,8 @@ const withStats = (f) => (liveFoods ? { ...f, ...statsFor(f.id) } : f);
 export const STORE_FOODS_LIVE = !!liveFoods;
 // ---------- diet log: what the pet eats, with dates ----------
 // function declarations (not const arrows): the startup load below runs before the lines that define consts, so these must already exist
-function fromDiet(r) { return { id: r.id, foodId: r.food_id, foodName: r.food_name, role: r.role, amount: Number(r.amount), unit: r.unit, timesPerDay: Number(r.times_per_day), startedOn: r.started_on, endedOn: r.ended_on, replacedId: r.replaced_id, note: r.note }; }
-function toDiet(it) { return { id: it.id, pet_id: petId, food_id: it.foodId || null, food_name: it.foodName, role: it.role || 'main', amount: it.amount, unit: it.unit || 'g', times_per_day: it.timesPerDay, started_on: it.startedOn, ended_on: it.endedOn || null, replaced_id: it.replacedId || null, note: it.note || null }; }
+function fromDiet(r) { return { id: r.id, foodId: r.food_id, foodName: r.food_name, role: r.role, amount: Number(r.amount), unit: r.unit, timesPerDay: Number(r.times_per_day), startedOn: r.started_on, endedOn: r.ended_on, replacedId: r.replaced_id, note: r.note, ...(r.kcal_per_kg ? { kcalPerKg: Number(r.kcal_per_kg) } : {}), ...(r.recipe ? { recipe: r.recipe } : {}) }; }
+function toDiet(it) { return { id: it.id, pet_id: petId, food_id: it.foodId || null, food_name: it.foodName, role: it.role || 'main', amount: it.amount, unit: it.unit || 'g', times_per_day: it.timesPerDay, started_on: it.startedOn, ended_on: it.endedOn || null, replaced_id: it.replacedId || null, note: it.note || null, ...(it.kcalPerKg ? { kcal_per_kg: it.kcalPerKg } : {}), ...(it.recipe ? { recipe: it.recipe } : {}) }; } // kcal_per_kg and recipe are only sent when set, so a database without those columns still saves normal foods
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`);
 export const getDiet = () => (isSignedIn() ? mem.pet?.diet || [] : []);
 // One call for every kind of change on one day: stop some foods (by id), start others. A start can say which stop it replaces.
@@ -245,7 +275,7 @@ export function changeDiet({ date, stops = [], starts = [] }) {
   if (date < (pet.birth || '0000')) return { ok: false, message: 'That is before your pet was born.' };
   for (const id of stops) { const it = diet.find((x) => x.id === id); if (!it) return { ok: false, message: 'That food is not in the current diet.' }; if (date < it.startedOn) return { ok: false, message: `${it.foodName} was only added on ${it.startedOn}, so it cannot stop before that.` }; }
   const stopped = diet.filter((x) => stops.includes(x.id)).map((x) => ({ ...x, endedOn: date }));
-  const fresh = starts.map((s) => ({ id: newId(), foodId: s.foodId || null, foodName: String(s.foodName).trim(), role: s.role || 'main', amount: Number(s.amount), unit: s.unit || 'g', timesPerDay: Number(s.timesPerDay) || 1, startedOn: date, endedOn: null, replacedId: s.replacesId || null, note: s.note || null }));
+  const fresh = starts.map((s) => ({ id: newId(), foodId: s.foodId || null, foodName: String(s.foodName).trim(), role: s.role || 'main', amount: Number(s.amount), unit: s.unit || 'g', timesPerDay: Number(s.timesPerDay) || 1, startedOn: date, endedOn: null, replacedId: s.replacesId || null, note: s.note || null, ...(Number(s.kcalPerKg) > 0 ? { kcalPerKg: Math.round(Number(s.kcalPerKg)) } : {}), ...(Array.isArray(s.recipe) && s.recipe.length ? { recipe: s.recipe } : {}) }));
   for (const it of fresh) { if (!it.foodName) return { ok: false, message: 'Add the name of the food.' }; if (!(it.amount > 0)) return { ok: false, message: 'Add how much they get at each meal.' }; if (!(it.timesPerDay > 0)) return { ok: false, message: 'Add how many times a day.' }; }
   pet.diet = [...fresh, ...diet.map((x) => stopped.find((y) => y.id === x.id) || x)]; save();
   sync(async () => {
@@ -284,7 +314,7 @@ export const getGoalHistory = () => (isSignedIn() ? mem.pet?.goalHistory || [] :
 // Same goal again keeps its original start and date. A change on the same day refines it quietly. A change on a later day
 // archives the old goal in the history (with its dates and the weight at the time), then starts the new one today.
 export function setGoal(draft, { outcome = 'replaced' } = {}) {
-  const pet = mem.pet; if (!pet) return null;
+  const pet = mem.pet; if (!pet || !draft || !['grow', 'lose', 'gain', 'maintain'].includes(draft.type) || !Number.isFinite(Number(draft.targetKg)) || !(Number(draft.targetKg) > 0)) return null;
   const t = today(); const prev = pet.goal?.targetDate ? pet.goal : null;
   const next = { type: draft.type, targetKg: draft.targetKg, custom: draft.custom, fromChart: draft.fromChart, kcalOverride: draft.kcalOverride, days: Number(draft.days) || 90 };
   Object.keys(next).forEach((k) => next[k] === undefined && delete next[k]);
@@ -319,6 +349,9 @@ export function clearGoal({ outcome = 'cleared' } = {}) {
 
 export const listFoods = () => (liveFoods ? liveFoods.map(withStats) : FOODS.map((f) => ({ ...f, source: 'Sample data (offline)' })));
 export const getFood = (id) => listFoods().find((f) => f.id === id) || null;
+export const listTreats = () => liveTreats;
+export const listSupplements = () => liveSupplements;
+export const getTreat = (id) => liveTreats.find((t) => t.id === id) || null;
 // Barcode lookup: the loaded foods first, then Open Pet Food Facts by code.
 export async function findFoodByBarcode(code) {
   const c = String(code).trim(); if (!c) return null;

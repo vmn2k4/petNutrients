@@ -18,7 +18,7 @@ export const SEO_BY_PATH = [
   [/^\/toxic\/?$/, { title: 'Can My Dog or Cat Eat This? Toxic Food Checker (Free)', desc: 'Type a food to see if it is safe, risky or toxic for dogs and cats before you share a snack. Can dogs eat grapes? Check here. Not vet advice.' }],
   [/^\/can-dogs-eat\//, { title: null, desc: null }],
   [/^\/can-cats-eat\//, { title: null, desc: null }],
-  [/^\/recipe\/?$/, { title: 'Home-cooked Pet Food Recipe Checker – AAFCO Gaps', desc: 'Cooking for your dog or cat? Add your ingredients and see which nutrients are missing or too high against AAFCO targets.' }],
+  [/^\/recipe\/?$/, { title: 'Homemade Pet Food Mix Builder – Calories & AAFCO Gaps', desc: 'Cooking for your dog or cat? Mix real ingredients (USDA data) by percent or grams, see calories per 100 g, and check protein, fat, calcium and phosphorus against AAFCO targets.' }],
   [/^\/guides\/puppy-growth-chart\/?$/, { title: 'Puppy Growth Chart: How Big Will My Puppy Get?', desc: "Use a puppy growth chart to see your dog's weight percentile, estimate how big your puppy will get, and find daily calories for a safe goal. Kittens too." }],
   [/^\/guides\/?$/, { title: 'Dog & Cat Nutrition Guides – Labels, AAFCO, Feeding', desc: 'Plain-English guides to reading pet food labels, AAFCO profiles, puppy and kitten growth, healthy weight and home-cooked food.' }],
   [/^\/tools\/?$/, { title: 'Free Pet Nutrition Tools – Scanner, Growth, Toxic Foods', desc: 'Free pet nutrition tools: food label scanner, homemade recipe checker, growth chart goal planner and toxic food checker for dogs and cats.' }],

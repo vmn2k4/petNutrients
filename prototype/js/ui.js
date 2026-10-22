@@ -12,6 +12,9 @@ export const button = ({ label, href, variant = 'primary', iconName, attrs = '',
   return href ? `<a class="${c}" href="${esc(href)}" ${attrs}>${inner}</a>` : `<button class="${c}" type="${type}" ${attrs}>${inner}</button>`;
 };
 
+// Product picture: the maker's or retailer's packshot when we have one (their image, linked not copied), else our generic bowl. Falls back if the link is dead.
+export const foodPic = (food, attrs = '') => `<img src="${esc(food.photo || food.img)}" alt="" width="600" height="600" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${esc(food.img)}'" ${attrs}>`;
+
 export const card = (inner, { href, flat = false, cls = '' } = {}) =>
   href ? `<a class="card card--link ${flat ? 'card--flat' : ''} ${cls}" href="${esc(href)}">${inner}</a>` : `<section class="card ${flat ? 'card--flat' : ''} ${cls}">${inner}</section>`;
 
@@ -45,7 +48,11 @@ export function mountCombos(root) {
     const open = (v) => list.toggleAttribute('hidden', !v) || input.setAttribute('aria-expanded', String(v));
     const draw = (all_) => {
       const q = input.value.trim().toLowerCase();
-      shown = (all_ || !q ? all : [...all.filter((o) => o.toLowerCase().startsWith(q)), ...all.filter((o) => !o.toLowerCase().startsWith(q) && o.toLowerCase().includes(q))]).slice(0, 60);
+      // every typed word must appear somewhere in the option, in any order ("open farm stew" finds "Open Farm Beef Dog Rustic Stew");
+      // matches that start with the whole text come first, then ones that contain it as typed, then the rest
+      const words = q.split(/\s+/).filter(Boolean); const lc = (o) => o.toLowerCase();
+      const rest = all.filter((o) => words.every((w) => lc(o).includes(w)));
+      shown = (all_ || !q ? all : [...rest.filter((o) => lc(o).startsWith(q)), ...rest.filter((o) => !lc(o).startsWith(q) && lc(o).includes(q)), ...rest.filter((o) => !lc(o).includes(q))]).slice(0, 60);
       active = shown.findIndex((o) => o.toLowerCase() === q);
       list.innerHTML = shown.length
         ? shown.map((o, i) => `<li role="option" id="${input.id}-o${i}" data-i="${i}" aria-selected="${i === active}">${esc(o)}</li>`).join('')
@@ -102,9 +109,10 @@ export const stepper = (total, current) =>
 
 // min/max markers on a meter: value vs target band
 export const meter = ({ label, value, unit, min, max, state, scaleMax }) => {
+  const fmt = (n) => (Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10); // 74.5, not 74.54335362163032
   const top = scaleMax || Math.max(value ?? 0, max ?? 0, (min ?? 0) * 2) * 1.15 || 1;
   const w = value == null ? 0 : Math.min(100, (value / top) * 100);
-  return `<div class="meter" data-state="${state || ''}"><div class="meter__head"><span>${esc(label)}</span><strong>${value == null ? 'not reported' : `${value.toFixed(1)} ${esc(unit)}`}</strong></div><div class="meter__track" role="img" aria-label="${esc(label)} ${value == null ? 'not reported' : value.toFixed(1)}${min != null ? `, minimum ${min}` : ''}${max != null ? `, maximum ${max}` : ''}"><div class="meter__fill" style="width:${w}%"></div>${min != null ? `<span class="meter__mark" style="left:${(min / top) * 100}%"></span>` : ''}${max != null ? `<span class="meter__mark" style="left:${(max / top) * 100}%"></span>` : ''}</div><div class="hint">${min != null ? `min ${min}` : ''}${min != null && max != null ? ' · ' : ''}${max != null ? `max ${max}` : ''}${min == null && max == null ? 'no AAFCO limit' : ''}</div></div>`;
+  return `<div class="meter" data-state="${state || ''}"><div class="meter__head"><span>${esc(label)}</span><strong>${value == null ? 'not reported' : `${value.toFixed(1)} ${esc(unit)}`}</strong></div><div class="meter__track" role="img" aria-label="${esc(label)} ${value == null ? 'not reported' : value.toFixed(1)}${min != null ? `, minimum ${fmt(min)}` : ''}${max != null ? `, maximum ${fmt(max)}` : ''}"><div class="meter__fill" style="width:${w}%"></div>${min != null ? `<span class="meter__mark" style="left:${(min / top) * 100}%"></span>` : ''}${max != null ? `<span class="meter__mark" style="left:${(max / top) * 100}%"></span>` : ''}</div><div class="hint">${min != null ? `min ${fmt(min)}` : ''}${min != null && max != null ? ' · ' : ''}${max != null ? `max ${fmt(max)}` : ''}${min == null && max == null ? 'no AAFCO limit' : ''}</div></div>`;
 };
 
 export const stars = (n) => `<span class="stars" role="img" aria-label="${n} out of 5 stars">${[1, 2, 3, 4, 5].map((i) => icon('star', i <= Math.round(n) ? 'is-on' : '')).join('')}</span>`;
@@ -127,5 +135,7 @@ export const emptyState = ({ img, title, text, action = '', compact = false }) =
 
 // Section tabs for My pet (Overview, Growth, Profile).
 export const petTabs = (active) => `<nav class="pettabs" aria-label="My pet sections">${[['overview', 'Overview', '/pet'], ['growth', 'Growth', '/pet/growth'], ['diet', 'Diet', '/pet/diet'], ['profile', 'Profile', '/pet/profile']].map(([k, l, h]) => `<a href="${h}" ${active === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
+// Wording shown wherever a daily kcal or gram amount appears: it is an estimate, and a diet change belongs with the vet.
+export const KCAL_NOTE = 'Calories are estimates, not exact amounts. Check with your vet before starting or changing a diet, especially a weight-loss or weight-gain plan.';
 // Short persistent disclaimer shown next to estimates (growth, calories, matches, safety answers).
-export const expNote = (extra = '') => `<p class="expnote">${icon('info')} Experimental estimate, not veterinary advice. Check with another reliable source and your vet before acting.${extra} <a href="/disclaimer">Disclaimer</a></p>`;
+export const expNote = (extra = '') => `<p class="expnote">${icon('info')} Beta and experimental. We do our best with the best information available, but it can be wrong. Not veterinary advice, and we are not responsible for decisions made from it. Check with another reliable source and your vet before acting.${extra} <a href="/disclaimer">Disclaimer</a></p>`;

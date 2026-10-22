@@ -1,0 +1,33 @@
+{
+  "note": "Ingredient safety cases for foodFit(): each lists one ingredient for a healthy adult dog (or cat) with otherwise passing nutrients, the pet's listed allergies, and the verdict that must result. The same lists must be used by the server and Flutter app when food fit moves to the database.",
+  "cases": [
+    { "ingredient": "garlic oil", "species": "dog", "allergies": [], "verdict": "bad" },
+    { "ingredient": "onion powder", "species": "cat", "allergies": [], "verdict": "bad" },
+    { "ingredient": "chives", "species": "dog", "allergies": [], "verdict": "bad" },
+    { "ingredient": "cocoa powder", "species": "dog", "allergies": [], "verdict": "bad" },
+    { "ingredient": "cacao", "species": "cat", "allergies": [], "verdict": "bad" },
+    { "ingredient": "macadamia nuts", "species": "dog", "allergies": [], "verdict": "bad" },
+    { "ingredient": "grape pomace", "species": "dog", "allergies": [], "verdict": "bad" },
+    { "ingredient": "raisins", "species": "dog", "allergies": [], "verdict": "bad" },
+    { "ingredient": "xylitol", "species": "dog", "allergies": [], "verdict": "bad" },
+    { "ingredient": "propylene glycol", "species": "cat", "allergies": [], "verdict": "bad" },
+    { "ingredient": "propylene glycol", "species": "dog", "allergies": [], "verdict": "good" },
+    { "ingredient": "macadamia nuts", "species": "cat", "allergies": [], "verdict": "good" },
+    { "ingredient": "chicken", "species": "dog", "allergies": [], "verdict": "good" },
+    { "ingredient": "peanut butter", "species": "dog", "allergies": ["dairy"], "verdict": "good" },
+    { "ingredient": "whitefish", "species": "dog", "allergies": ["fish"], "verdict": "bad" },
+    { "ingredient": "cod liver oil", "species": "dog", "allergies": ["fish"], "verdict": "bad" },
+    { "ingredient": "herring meal", "species": "dog", "allergies": ["fish"], "verdict": "bad" },
+    { "ingredient": "yogurt powder", "species": "dog", "allergies": ["dairy"], "verdict": "bad" },
+    { "ingredient": "sodium caseinate", "species": "dog", "allergies": ["dairy"], "verdict": "bad" },
+    { "ingredient": "poultry meal", "species": "dog", "allergies": ["chicken"], "verdict": "bad" },
+    { "ingredient": "veal", "species": "dog", "allergies": ["beef"], "verdict": "bad" },
+    { "ingredient": "mutton", "species": "dog", "allergies": ["lamb"], "verdict": "bad" },
+    { "ingredient": "wheat gluten", "species": "dog", "allergies": ["wheat"], "verdict": "bad" },
+    { "ingredient": "maize", "species": "dog", "allergies": ["corn"], "verdict": "bad" },
+    { "ingredient": "soya protein", "species": "dog", "allergies": ["soy"], "verdict": "bad" },
+    { "ingredient": "pea protein", "species": "dog", "allergies": ["pea"], "verdict": "bad" },
+    { "ingredient": "salmon", "species": "dog", "allergies": ["chicken"], "verdict": "good" },
+    { "ingredient": "rice", "species": "dog", "allergies": ["fish", "dairy", "chicken", "beef", "lamb", "wheat", "corn", "soy", "pea", "egg"], "verdict": "good" }
+  ]
+}

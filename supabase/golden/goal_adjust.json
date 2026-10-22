@@ -1,0 +1,161 @@
+{
+ "note": "Gain and weigh-in adjustment cases for goalPlan(). Healthy-weight 30 kg neutered dog, 4 years old, size V, normal activity (keeps weight steady at 1,346 kcal). Goals start `startDaysAgo` days ago. kcal is what the plan must show.",
+ "pet": {
+  "species": "dog",
+  "weightKg": 30,
+  "bcs": 5,
+  "neutered": true,
+  "ageYears": 4,
+  "sizeCat": "V",
+  "exerciseMin": 45
+ },
+ "cases": [
+  {
+   "name": "new gain goal: 10% above maintenance, vet warning at ideal body score",
+   "goal": {
+    "type": "gain",
+    "targetKg": 33,
+    "days": 90
+   },
+   "kcal": 1481,
+   "adjust": null,
+   "vetWarning": true
+  },
+  {
+   "name": "gain, 28 days in, no weight change: raise 5%",
+   "goal": {
+    "type": "gain",
+    "targetKg": 33,
+    "totalDays": 90,
+    "startDaysAgo": 28,
+    "startKg": 30
+   },
+   "nowKg": 30,
+   "adjust": 0.05
+  },
+  {
+   "name": "gain 30 to 36 kg, 84 days in, no change: raise 10% (line is the realistic 342 days)",
+   "goal": {
+    "type": "gain",
+    "targetKg": 36,
+    "totalDays": 90,
+    "startDaysAgo": 84,
+    "startKg": 30
+   },
+   "nowKg": 30,
+   "adjust": 0.1
+  },
+  {
+   "name": "gain, 28 days in, on track: no change",
+   "goal": {
+    "type": "gain",
+    "targetKg": 33,
+    "totalDays": 90,
+    "startDaysAgo": 28,
+    "startKg": 30
+   },
+   "nowKg": 30.9,
+   "adjust": null
+  },
+  {
+   "name": "gain, 10 days in: too early to adjust",
+   "goal": {
+    "type": "gain",
+    "targetKg": 33,
+    "totalDays": 90,
+    "startDaysAgo": 10,
+    "startKg": 30
+   },
+   "nowKg": 30,
+   "adjust": null
+  },
+  {
+   "name": "gain, far ahead of plan: lower 5%",
+   "goal": {
+    "type": "gain",
+    "targetKg": 33,
+    "totalDays": 90,
+    "startDaysAgo": 28,
+    "startKg": 30
+   },
+   "nowKg": 32.5,
+   "adjust": -0.05
+  },
+  {
+   "name": "owner's 90 day date is out of reach but the dog gains as expected: no change (not behind)",
+   "goal": {
+    "type": "gain",
+    "targetKg": 33,
+    "totalDays": 90,
+    "startDaysAgo": 49,
+    "startKg": 30
+   },
+   "nowKg": 30.85,
+   "adjust": null
+  },
+  {
+   "name": "loss 35 to 29.2 kg, 14 days in, dropping 2.9% a week: note only",
+   "pet": {
+    "weightKg": 35,
+    "bcs": 7
+   },
+   "goal": {
+    "type": "lose",
+    "targetKg": 29.2,
+    "totalDays": 120,
+    "startDaysAgo": 14,
+    "startKg": 35
+   },
+   "nowKg": 33.0,
+   "adjust": 0
+  },
+  {
+   "name": "loss 35 to 29.2 kg, 14 days in, dropping 3.6% a week: raise 5%",
+   "pet": {
+    "weightKg": 35,
+    "bcs": 7
+   },
+   "goal": {
+    "type": "lose",
+    "targetKg": 29.2,
+    "totalDays": 120,
+    "startDaysAgo": 14,
+    "startKg": 35
+   },
+   "nowKg": 32.5,
+   "adjust": 0.05
+  },
+  {
+   "name": "loss 35 to 29.2 kg, 56 days in, almost no loss: lower 10%",
+   "pet": {
+    "weightKg": 35,
+    "bcs": 7
+   },
+   "goal": {
+    "type": "lose",
+    "targetKg": 29.2,
+    "totalDays": 120,
+    "startDaysAgo": 56,
+    "startKg": 35
+   },
+   "nowKg": 34.8,
+   "adjust": -0.1
+  },
+  {
+   "name": "loss 35 to 29.2 kg, 56 days in, losing 1% a week as planned: no change",
+   "pet": {
+    "weightKg": 35,
+    "bcs": 7
+   },
+   "goal": {
+    "type": "lose",
+    "targetKg": 29.2,
+    "totalDays": 120,
+    "startDaysAgo": 56,
+    "startKg": 35
+   },
+   "nowKg": 32.2,
+   "adjust": null
+  }
+ ]
+}

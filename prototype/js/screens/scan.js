@@ -1,6 +1,6 @@
 import { findFoodByBarcode, listFoods } from '../store.js';
 import { foodFit, NUTRIENTS, energyPlan, nutrientTargets, gramsPerDay, costPerDay } from '../domain.js';
-import { card, button, verdictBanner, meter, notice, field, icon, esc, pageHead, badge, expNote } from '../ui.js';
+import { KCAL_NOTE, card, button, verdictBanner, meter, notice, field, icon, esc, pageHead, badge, expNote } from '../ui.js';
 import { makeCtx, foodCard } from './foods.js';
 
 const SAMPLE = { name: 'Photographed label (sample)', protein: 26, fat: 14, fibre: 4, moisture: 10, kcalPerKg: 3600, calcium: '', phosphorus: '' };
@@ -17,12 +17,12 @@ function result(ctx) {
   const food = asFood(current, species);
   if (!food.kcalPerKg) return notice('Add the calories (kcal/kg) from the label so we can compare fairly. No kcal/kg? Many labels show kcal per cup instead.', 'caution');
   const fit = foodFit(food, pet, plan, targets);
-  const titles = { good: 'Looks like a great match', caution: 'Partly checked', bad: 'Not the best match' };
+  const titles = { good: 'Meets the nutrient targets', caution: 'Partly checked', bad: 'Not the best match' };
   const alts = listFoods().filter((f) => f.species === species).map((f) => ({ f, v: foodFit(f, pet, plan, targets).verdict })).filter((x) => x.v === 'good').slice(0, 3);
   return `<div class="stack">
-    ${verdictBanner(fit.verdict, `${titles[fit.verdict]} for ${esc(pet.name)}`, fit.warn.length ? fit.warn.map((w) => esc(w.text)).join('<br>') : 'Protein, fat, calcium and phosphorus all hit the targets for their life stage.')}
+    ${verdictBanner(fit.verdict, `${titles[fit.verdict]} for ${esc(pet.name)}`, fit.warn.length ? fit.warn.map((w) => esc(w.text)).join('<br>') : 'Protein, fat, calcium and phosphorus all hit the targets for their life stage. Vitamins and "complete and balanced" are not checked, so read the bag too.')}
     ${card(`<h2>Nutrients per 1000 kcal</h2><div class="stack">${fit.checks.map((k) => meter({ label: k.label, value: k.value, unit: 'g', min: k.target?.min, max: k.target?.max, state: k.state === 'unknown' ? '' : k.state })).join('')}</div>
-      <p class="hint">${!plan.hideKcal && gramsPerDay(food, plan.kcal) ? `Feeding about ${Math.round(gramsPerDay(food, plan.kcal))} g a day would give ${Math.round(plan.kcal)} kcal.` : ''}</p>`)}
+      <p class="hint">${!plan.hideKcal && gramsPerDay(food, plan.kcal) ? `Feeding about ${Math.round(gramsPerDay(food, plan.kcal))} g a day would give ${Math.round(plan.kcal)} kcal. ${KCAL_NOTE}` : ''}</p>`)}
     <section><h2>Similar foods that fit</h2>${alts.length ? `<div class="grid grid--auto">${alts.map((a) => foodCard(a.f, { pet, plan, targets })).join('')}</div>` : '<p class="muted">No similar foods in our catalogue yet. We are adding more.</p>'}</section></div>`;
 }
 

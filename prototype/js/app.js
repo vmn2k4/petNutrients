@@ -16,8 +16,8 @@ const NAV_OUT = [
 const NAV_IN = [
   { href: '/pet', label: 'Growth', icon: 'chart', match: /^\/(pet(\/growth)?|new)$/ },
   { href: '/pet/diet', label: 'Diet', icon: 'leaf', match: /^\/pet\/diet/ },
+  { href: '/scan', label: 'Scan', icon: 'scan', match: /^\/scan/, primary: true }, // third of five, so the raised button sits in the middle of the bar
   { href: '/foods', label: 'Find food', icon: 'bowl', match: /^\/foods/ },
-  { href: '/scan', label: 'Scan', icon: 'scan', match: /^\/scan/, primary: true },
   { href: '/pet/profile', label: 'Profile', icon: 'paw', match: /^\/pet\/profile/ },
 ];
 

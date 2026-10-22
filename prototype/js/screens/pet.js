@@ -5,9 +5,10 @@ import { dietHtml, mountDiet } from '../diet.js';
 import { isSignedIn, getPet, addWeighIn, clearPet, updatePet, setGoal, clearGoal, getGoalHistory } from '../store.js';
 import { weightCheck, energyPlan, nutrientTargets, growthBands, percentile, ageInMonths, sizeCategory, breedSize, round, kgToLb, completeness, remainingKeys, weighStatus, ALLERGENS, goalPlan, GOALS, SIZE_CATEGORIES, weightAtPercentile, targetBounds, targetCheck, lifeStage, ordinal, effectiveGoal, goalProgress, fmtDay, monthsExact, projectGrowth, projectTrend, addDaysStr, todayStr } from '../domain.js';
 import { BCS_OPTIONS } from '../mock-data.js';
+import { activityOptions, activityBand, activityLabel, activityPatch } from '../domain.js';
 import { DOG_BREEDS, BREED_INFO } from '../reference.js';
 import { openSheet, toast } from '../sheet.js';
-import { card, stat, badge, button, notice, verdictBanner, field, choiceGroup, esc, disclosure, icon, pageBand, progressRing, emptyState, petTabs, selectField, comboField, mountCombos, sizeBlock, bindBreedSize, expNote } from '../ui.js';
+import { KCAL_NOTE, card, stat, badge, button, notice, verdictBanner, field, choiceGroup, esc, disclosure, icon, pageBand, progressRing, emptyState, petTabs, selectField, comboField, mountCombos, sizeBlock, bindBreedSize, expNote } from '../ui.js';
 import { targetPickerHtml, mountTargetPicker } from '../targetpicker.js';
 
 export const needPet = () => (!isSignedIn() ? profileGate() : {
@@ -44,7 +45,7 @@ function percentileBlock(pet) {
 const ASK = {
   bcs: { chip: 'Body shape', title: 'How does the body look?', why: 'Helps us find their ideal weight and the right calories.' },
   neutered: { chip: 'Spayed or neutered', title: 'Spayed or neutered?', why: 'Spayed and neutered pets usually need fewer calories.' },
-  activity: { chip: 'Activity', title: 'How active are they?', why: 'Busy pets burn more, so we adjust their portions.' },
+  activity: { chip: 'Activity', title: 'How active are they?', why: 'A rough guess is fine. Busy pets burn more energy, so we adjust their daily kcal.' },
   allergies: { chip: 'Allergies', title: 'Any ingredients to avoid?', why: 'We flag or hide foods that contain them.' },
 };
 
@@ -55,7 +56,7 @@ function askBody(key, pet) {
       : choiceGroup({ name: 'bcs', legend: 'How does your cat look?', value: pet.bcs, options: [{ value: 5, label: 'Healthy weight' }, { value: 6, label: 'A bit heavy' }, { value: 3, label: 'Thin' }] });
   }
   if (key === 'neutered') return choiceGroup({ name: 'neutered', legend: 'Spayed or neutered?', value: pet.neutered ? 'yes' : 'no', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'unsure', label: 'Not sure' }] });
-  if (key === 'activity') return choiceGroup({ name: 'activity', legend: 'Activity level', value: pet.activity, options: [{ value: 'low', label: 'Low', sub: 'mostly resting' }, { value: 'normal', label: 'Normal' }, { value: 'high', label: 'High', sub: 'very active' }] });
+  if (key === 'activity') return activityGroup(pet);
   return choiceGroup({ name: 'allergies', legend: 'Pick any that apply', type: 'checkbox', value: pet.allergies || [], options: ALLERGENS.map((a) => ({ value: a, label: a })) });
 }
 
@@ -69,7 +70,7 @@ function openAsk(key, rerender) {
         e.preventDefault(); const f = new FormData(e.target); const patch = {};
         if (key === 'bcs') patch.bcs = Math.round(Number(f.get('bcs') || pet.bcs));
         if (key === 'neutered') patch.neutered = f.get('neutered') !== 'no';
-        if (key === 'activity') patch.activity = f.get('activity') || pet.activity;
+        if (key === 'activity') Object.assign(patch, f.get('activity') ? activityPatch(f.get('activity'), pet.species) : {});
         if (key === 'allergies') patch.allergies = f.getAll('allergies');
         updatePet({ ...patch, answered: { ...(pet.answered || {}), [key]: true } });
         close(); rerender(); toast('Plan updated');
@@ -96,8 +97,8 @@ function weighCard(pet) {
 // ---- breed card: what breed changes and what it does not ------------------------------------
 const exerciseHint = (pet) => {
   const hrs = BREED_INFO[pet.breed]?.ex; if (hrs == null) return null;
-  const fit = hrs <= 1 ? 'Low' : hrs <= 2 ? 'Normal' : 'High';
-  return { hrs, fit, text: `${pet.breed}s typically get about ${hrs} hour${hrs === 1 ? '' : 's'} of exercise a day, so "${fit}" often fits.` };
+  const fit = hrs * 60;
+  return { hrs, fit, text: `${pet.breed}s typically get about ${hrs} hour${hrs === 1 ? '' : 's'} of exercise a day.` };
 };
 
 function breedCard(pet, plan) {
@@ -139,8 +140,8 @@ function goalSummary(pet) {
   let body;
   if (g.expired) body = `The goal date (${date}) has passed. Set a new goal to keep going.`;
   else if (g.type === 'grow' && !g.custom) body = `Expected about ${round(gp.targetKg, 1)} kg by ${date}. ${g.daysLeft} days left.`;
-  else if (g.type === 'maintain') body = `Keep around ${round(g.startKg, 1)} kg until ${date}. ${g.daysLeft} days left, about ${gp.kcal} calories a day.`;
-  else body = `${round(g.startKg, 1)} kg to ${round(g.targetKg, 1)} kg by ${date}. ${g.daysLeft} days left, about ${gp.kcal} calories a day.`;
+  else if (g.type === 'maintain') body = `Keep around ${round(g.startKg, 1)} kg until ${date}. ${g.daysLeft} days left, about ${gp.kcal} kcal a day.`;
+  else body = `${round(g.startKg, 1)} kg to ${round(g.targetKg, 1)} kg by ${date}. ${g.daysLeft} days left, about ${gp.kcal} kcal a day.`;
   const badges = `${pr ? badge(g.expired ? 'Goal date reached' : pr.text, g.expired ? 'caution' : PROGRESS_KIND[pr.state]) : ''}${gp.pace.state !== 'good' ? badge(gp.pace.text, gp.pace.state) : ''}`;
   return { title: `Goal: ${label}`, body, badges, started: g.startOn, progress: pr, goal: g };
 }
@@ -219,7 +220,8 @@ function goalHistoryCard(pet) {
   const rows = hist.map((h) => `<tr><td>${fmtDay(h.startOn)} to ${fmtDay(h.endedOn)}</td><td>${esc(GOALS.find((x) => x.id === h.type)?.label || h.type)}: ${round(h.startKg, 1)} to ${round(h.targetKg, 1)} kg by ${fmtDay(h.targetDate)}</td><td>${OUTCOME[h.outcome] || h.outcome}${h.endKg != null ? ` at ${round(h.endKg, 1)} kg` : ''}</td></tr>`).join('');
   return card(`<h2>Goal progress and history</h2>${progress}
     ${hist.length ? `<div class="table-wrap" style="margin-top:var(--space-4)"><table><thead><tr><th>When</th><th>Goal</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
-    <p class="hint" style="margin:var(--space-3) 0 0">A goal keeps its date. Changing the weight or date starts a new goal, and the old one stays here.</p>`);
+    ${gs ? `<div style="margin-top:var(--space-4)"><a class="btn btn--dark" href="/foods">Find foods for this goal</a></div>` : ''}
+    <p class="hint" style="margin:var(--space-3) 0 0">A goal keeps its date. Changing the weight or date starts a new goal, and the old one stays here. ${KCAL_NOTE}</p>`);
 }
 
 function historyCard(pet) {
@@ -240,7 +242,7 @@ function energyWeighCard(pet, plan) {
   return card(`<h2>Daily energy</h2>
     <div class="ov-energy"><div><div class="kcal-hero kcal-hero--sm" data-count="${Math.round(plan.kcal)}">${Math.round(plan.kcal)}</div><span class="muted small">kcal per day</span></div>
       ${stat(`${round(plan.ideal, 1)} kg`, plan.ideal < pet.weightKg ? 'ideal weight (est.)' : 'target weight')}</div>
-    <p class="hint">Approximate: please check this with your vet. ${esc(plan.method)}.${remainingKeys(pet).length ? ' Estimated from defaults until you answer the questions above.' : ''}${plan.losing ? ` Never go below ${Math.round(plan.floor)} kcal without a vet nutritionist.` : ''}</p>
+    <p class="hint">${KCAL_NOTE} ${esc(plan.method)}.${remainingKeys(pet).length ? ' Estimated from defaults until you answer the questions above.' : ''}${plan.losing ? ` Never go below ${Math.round(plan.floor)} kcal without a vet nutritionist.` : ''}</p>
     <div class="ov-weigh"><div><strong>Weigh-in</strong>${w.streak ? ` ${badge(`${w.streak} on schedule`, 'good', 'fire')}` : ''}<div class="muted small">${due}.</div></div>${button({ label: 'Log weight', variant: 'secondary btn--small', iconName: 'plus', attrs: 'data-quick-weight' })}</div>`, { cls: 'card--tight' });
 }
 
@@ -281,7 +283,7 @@ function viewDiet(pet, plan) {
 }
 
 // ---- Profile on phones: a grouped list; each row opens a bottom sheet with just that setting ------------
-const ACTIVITY = [{ value: 'low', label: 'Low', sub: 'mostly resting' }, { value: 'normal', label: 'Normal' }, { value: 'high', label: 'High', sub: 'very active' }];
+const activityGroup = (pet) => { const o = activityOptions(pet.species); return choiceGroup({ name: 'activity', legend: 'Walking or active play a day', value: o[Math.min(['low', 'normal', 'active', 'very'].indexOf(activityBand(pet)), o.length - 1)].value, options: o }); };
 const HEALTH = [{ value: 'medical', label: 'Medical condition' }, { value: 'joints', label: 'Joint or knee problems' }, { value: 'pregnant', label: 'Pregnant or nursing' }];
 const bcsList = (pet) => (pet.species === 'dog' ? BCS_OPTIONS.map((o) => ({ value: o.score, label: `${o.score}. ${o.label}` })) : [{ value: 5, label: 'Healthy weight' }, { value: 6, label: 'A bit heavy' }, { value: 3, label: 'Thin' }]);
 const listOf = (a) => (a && a.length ? a.join(', ') : 'None');
@@ -293,7 +295,7 @@ function profileRows(pet) {
     ...(pet.species === 'dog' ? [['breed', 'Breed', pet.breed || 'Mixed breed']] : []),
     ['weight', 'Weight', `${round(pet.weightKg, 1)} kg`],
     ['neutered', 'Spayed or neutered', pet.neutered ? 'Yes' : 'No'],
-    ['activity', 'Activity', (ACTIVITY.find((a) => a.value === pet.activity) || ACTIVITY[1]).label],
+    ['activity', 'Walking or play a day', activityLabel(pet)],
     ['bcs', 'Body shape', (bcsList(pet).find((o) => o.value === Math.round(pet.bcs)) || {}).label || 'Not set'],
     ['allergies', 'Ingredients to avoid', listOf(pet.allergies)],
     ['health', 'Health notes', (pet.health || []).length ? pet.health.map((h) => (HEALTH.find((x) => x.value === h) || {}).label || h).join(', ') : 'None'],
@@ -307,7 +309,7 @@ function openProfileSheet(key, pet, rerender) {
     birth: ['Date of birth', () => field({ id: 'p-birth', label: 'Date of birth (or an estimate)', type: 'date', value: pet.birth, attrs: `max="${today()}" required` })],
     breed: ['Breed', () => `${comboField({ id: 'p-breed', label: 'Breed', options: DOG_BREEDS.map((b) => b.name), value: pet.breed || '', placeholder: 'Leave empty for mixed breed', hint: 'We use it for the growth curve and usual adult weight.' })}${sizeBlock({ id: 'p-size', label: 'Adult size (used when breed is blank)', value: pet.sizeCat || 'IV', options: SIZE_CATEGORIES.map((s) => ({ value: s.id, label: s.label })) })}`],
     neutered: ['Spayed or neutered', () => choiceGroup({ name: 'neutered', legend: 'Spayed or neutered?', value: pet.neutered ? 'yes' : 'no', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] })],
-    activity: ['Activity', () => choiceGroup({ name: 'activity', legend: 'Activity level', value: pet.activity, options: ACTIVITY })],
+    activity: ['Activity', () => activityGroup(pet)],
     bcs: ['Body shape', () => selectField({ id: 'p-bcs', label: 'Body shape', value: pet.bcs, options: bcsList(pet), hint: 'Feel the ribs and look from above.' })],
     allergies: ['Ingredients to avoid', () => choiceGroup({ name: 'allergies', legend: 'Ingredients to avoid', type: 'checkbox', value: pet.allergies || [], options: ALLERGENS.map((a) => ({ value: a, label: a })) })],
     health: ['Health notes', () => choiceGroup({ name: 'health', legend: 'Anything we should know?', type: 'checkbox', value: pet.health || [], options: HEALTH })],
@@ -331,7 +333,7 @@ function openProfileSheet(key, pet, rerender) {
         }
         if (key === 'breed') { const breed = (f.get('p-breed') || '').toString().trim(); if (breed && !DOG_BREEDS.some((b) => b.name === breed)) { err.textContent = 'Pick a breed from the list, or leave it empty for a mixed breed.'; return; } patch = { breed, sizeCat: f.get('p-size') || pet.sizeCat }; }
         if (key === 'neutered') patch = { neutered: f.get('neutered') !== 'no', answered: { ...(pet.answered || {}), neutered: true } };
-        if (key === 'activity') patch = { activity: f.get('activity') || pet.activity, answered: { ...(pet.answered || {}), activity: true } };
+        if (key === 'activity') patch = { ...(f.get('activity') ? activityPatch(f.get('activity'), pet.species) : {}), answered: { ...(pet.answered || {}), activity: true } };
         if (key === 'bcs') patch = { bcs: Math.round(Number(f.get('p-bcs') || pet.bcs)), answered: { ...(pet.answered || {}), bcs: true } };
         if (key === 'allergies') patch = { allergies: f.getAll('allergies'), answered: { ...(pet.answered || {}), allergies: true } };
         if (key === 'health') patch = { health: f.getAll('health') };
@@ -357,7 +359,7 @@ function viewProfile(pet, plan) {
         ${breedField}
         <div class="field"><span class="legend">Current weight</span><p style="margin:0 0 var(--space-2)">${round(pet.weightKg, 1)} kg. To change it, log a new weigh-in.</p>${button({ label: 'Log a new weigh-in', href: '/pet/growth', variant: 'secondary', iconName: 'plus' })}</div>
         ${choiceGroup({ name: 'neutered', legend: 'Spayed or neutered?', value: pet.neutered ? 'yes' : 'no', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] })}
-        ${choiceGroup({ name: 'activity', legend: 'Activity level', value: pet.activity, options: [{ value: 'low', label: 'Low', sub: 'mostly resting' }, { value: 'normal', label: 'Normal' }, { value: 'high', label: 'High', sub: 'very active' }] })}
+        ${activityGroup(pet)}
         ${selectField({ id: 'p-bcs', label: 'Body shape', value: pet.bcs, options: bcsOptions, hint: 'Feel the ribs and look from above.' })}
         ${choiceGroup({ name: 'allergies', legend: 'Ingredients to avoid', type: 'checkbox', value: pet.allergies || [], options: ALLERGENS.map((a) => ({ value: a, label: a })) })}
         ${choiceGroup({ name: 'health', legend: 'Anything we should know?', type: 'checkbox', value: pet.health || [], options: [{ value: 'medical', label: 'Medical condition' }, { value: 'joints', label: 'Joint or knee problems' }, { value: 'pregnant', label: 'Pregnant or nursing' }] })}
@@ -377,7 +379,7 @@ function viewProfile(pet, plan) {
         const bd = new Date(birth); if (!birth || Number.isNaN(bd.getTime()) || birth > today()) { err.textContent = 'Please enter a date of birth that is not in the future.'; return; }
         if ((Date.now() - bd.getTime()) / (365.25 * 864e5) > 30) { err.textContent = 'That date of birth looks too long ago. Is it right?'; return; }
         if (pet.species === 'dog' && breed && !DOG_BREEDS.some((b) => b.name === breed)) { err.textContent = 'Pick a breed from the list, or leave it empty for a mixed breed.'; return; }
-        updatePet({ name, birth, breed: pet.species === 'dog' ? breed : '', sizeCat: f.get('p-size') || pet.sizeCat, neutered: f.get('neutered') !== 'no', activity: f.get('activity') || pet.activity, bcs: Math.round(Number(f.get('p-bcs') || pet.bcs)), allergies: f.getAll('allergies'), health: f.getAll('health'), answered: { bcs: true, neutered: true, activity: true, allergies: true } });
+        updatePet({ name, birth, breed: pet.species === 'dog' ? breed : '', sizeCat: f.get('p-size') || pet.sizeCat, neutered: f.get('neutered') !== 'no', ...(f.get('activity') ? activityPatch(f.get('activity'), pet.species) : {}), bcs: Math.round(Number(f.get('p-bcs') || pet.bcs)), allergies: f.getAll('allergies'), health: f.getAll('health'), answered: { bcs: true, neutered: true, activity: true, allergies: true } });
         toast('Profile saved'); rerender();
       });
       root.querySelector('#reset')?.addEventListener('click', () => { if (confirm('Remove this pet profile?')) { clearPet(); location.assign('/new'); } });

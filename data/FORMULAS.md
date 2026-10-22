@@ -13,7 +13,7 @@ All results are estimates for a healthy pet. They are not veterinary advice.
 | size group (I to VI) or breed | growth curve, large-breed rules | size IV (medium) |
 | body condition score (BCS, 1 to 9) | ideal weight, weight-loss flag | 5 (ideal) |
 | neutered yes/no | energy multiplier | wizard sets **yes** |
-| activity low / normal / high | energy multiplier | normal |
+| minutes of walking or active play a day (`exercise_min`) | energy multiplier (bands below) | typical (the neutered / intact factor); old low / normal / high answers still work |
 
 Life stage: **cat** growth under 12 months, adult after. **Dog** growth under 12 months, or under **18 months** for size V and VI (large, giant) [chosen; sources say 18 to 24]. Age is whole months completed (days ÷ 30.44), not a calendar-month difference.
 
@@ -29,14 +29,18 @@ Life stage: **cat** growth under 12 months, adult after. **Dog** growth under 12
 |---|---|---|---|---|
 | Adult, neutered | 1.5 | 1.3 | 1.4–1.6 / 1.2–1.4 | midpoint |
 | Adult, not neutered | 1.7 | 1.5 | 1.6–1.8 / 1.4–1.6 | midpoint |
-| Adult, activity low (inactive / obese-prone) | 1.1 | 1.0 | 1.0–1.2 / 1.0 | midpoint |
-| Adult, activity high | 1.8 | 1.6 | light work 1.6–2.0 (dog) / none (cat) | **chosen** |
+| Adult, under 30 min a day (cat: under 15) | 1.1 | 1.0 | 1.0–1.2 / 1.0 | midpoint |
+| Adult, 30 to 60 min (cat: 15 to 30) | neutered / intact row above | same | | typical pet |
+| Adult, 1 to 2 hours (cat: 30 min or more) | 1.8 | 1.6 | light work 1.6–2.0 (dog) / none (cat) | **chosen** |
+| Adult dog, 2 hours or more | 2.0 | n/a | top of light work 1.6–2.0 | **chosen**; above 2.0 is working or sport, needs a vet |
 | Growing, under 4 months | 3.0 | n/a | 3.0 | AAHA |
 | Growing, 4 months until adult | 2.0 | n/a | 2.0 | AAHA |
 | Growing kitten | n/a | 2.5 | 2.5 | AAHA |
 | Weight loss (RER at ideal weight) | **1.0** | **0.8** | 1.0 / 0.8 | AAHA |
 
-Activity overrides the neutered/intact choice (it is one or the other, never multiplied together).
+Activity bands live in `ref.activity_bands`, the factors in `ref.energy_factors`, and `public.energy_plan()` (migration `20261022000000_energy_plan.sql`) returns the same numbers as `domain.js`. Shared test cases: `supabase/golden/energy.json`, run with `node supabase/golden/run_energy.mjs` (domain) and `--sql` (database). 19 of 19 pass in both.
+
+Activity above the typical band overrides the neutered/intact choice (it is one or the other, never multiplied together).
 
 Weight-loss floor: `0.6 × RER(ideal)`. AAHA 2021 also reports observed mean intake for weight loss of about 63 kcal/kg^0.75 in dogs (0.9 × RER) and 52 kcal/kg^0.711 in cats. BCS 3 or lower, or a growing pet that needs to lose weight, shows a "talk to your vet" card.
 
@@ -57,16 +61,21 @@ So a figure near 700 kcal is what a neutered, normally active, healthy dog of ab
 
 - Keep steady: `RER(ideal) × factor` (same number as section 2).
 - Lose (time counts): `calories = clamp(maintenance − 7,700 × kg to lose ÷ days, AAHA start, maintenance)`. The AAHA start is `1.0 × RER(target or ideal weight)` for dogs, `0.8 ×` for cats. A longer time gives more food; a deadline too short for a safe amount of food is held at the AAHA start and the page shows how long it would really take at that amount (`days to goal = kg to lose × 7,700 ÷ (maintenance − AAHA start)`, a rough estimate). Example, 30 kg dog to 25 kg: 30 days 783 kcal (about 68 days really), 60 days 783, 90 days 918, 120 days 1,025, 180 days 1,132.
-- Gain: `maintenance + surplus`, where `surplus = (target kg − current kg) × 7,700 ÷ days` [rough rule of thumb from human research, so an estimate only].
+- Gain: `maintenance × 1.1` (a product choice, no published figure), whatever the date. The date is an estimate: `days = kg to gain × 7,700 ÷ (0.1 × maintenance)`, labelled rough. A gain goal for a pet at body score 5 shows a "check with your vet first" banner.
+- Weigh-in adjustment (gain and loss goals, saved goals only): nothing changes before 14 days. Progress is judged against the REALISTIC line, not the owner's date: `days = max(owner's days, kg to change × 7,700 ÷ |starting kcal − steady kcal|)`. So a dog that gains as expected at +10% is "on track" even if the owner's date was out of reach. If the real weight is behind that line by more than the tolerance (`max(0.2 kg, min(2% of start weight, 10% of the planned change))`), the amount moves 5% (10% if behind by more than twice the tolerance): gain goes up, loss goes down (never below the floor, 0.6 × RER at target). A gain far ahead of plan goes down 5%. Guards on the real weekly change: loss above 2% of body weight a week shows a "check with your vet" note, above 3% also raises the amount 5%; gain above 2.5% a week lowers it 5%. The step is always measured from the starting amount, never compounded. Based on the APOP step-based planner (5 to 10% steps); the weekly guards are our choice (AAHA 2014 safe loss 1 to 2% a week).
+- Server: `public.goal_plan()` and `public.pet_ideal_kg()` (migration `20261022000000_energy_plan.sql`) hold the same rules. `node supabase/golden/run_goal_parity.mjs <dir>` generates 300 scenarios; the database and `domain.js` give the same kcal, adjustment and estimate in all 300. Growing-pet goals are not in the database yet.
 - Pace check, weekly change as % of body weight: loss safe **1 to 2% for dogs** (AAHA 2014, seen in a summary table), **0.5 to 2% for cats** (reviewer's figure, not re-checked in the source), slower is "gentle", over 2% fast, over 3% too fast. Gain safe up to 1.5%, quick to 2.5%, too fast above [chosen].
 - Safe-days suggestion: `max(14, |target − current| ÷ current ÷ 0.015 × 7)` days.
+- Lose target limit (our choice): a target more than 10% under the estimated ideal weight is "not advised" (calories held at steady) and the picker stops at 90% of ideal; 5 to 10% under is a caution. A very slow pace (under 0.1% a week) is a caution, not "not above the current weight".
 - Goal sense: BCS ≥ 6 and gain = "not advised"; BCS ≤ 4 and lose = "not advised"; target below 95% of ideal = caution.
 
 ## 4. Growing pets
 
 - Percentile: the pet's weight is placed between the 2nd, 25th, 50th, 75th and 98th percentile weights for its age (interpolated by fractional month). Below the 2nd or above the 98th shows as an edge.
 - Curves: Salt et al. 2017 covers ages 12 weeks to 2 years and breeds up to about 40 kg in five size groups (checked in the paper's abstract and records, not the full text). Our dog rows under 3 months were not from Salt and had impossible values (a 29.5 kg newborn), so the app now drops them. Salt covers sizes I to V only, and says a model for dogs over 40 kg was not possible, so the giant group (VI) is **not from Salt** (our estimate). Dogs under 12 weeks are flagged "too young for the chart". The cat curve is a separate source. All are estimates and labelled so.
+- Large and giant breeds (size V, VI) never get more than the standard growth amount for a faster goal (scale at most 1.0); other puppies at most +10% [chosen]. Reason (vet sources, researched 2026-10-22): the rate of growth, which follows calorie intake, is a main risk factor for bone and joint disease in large breeds; they are fed to stay lean, and slower growth is preferred (Merck Veterinary Manual, VCA, Canadian Academy of Veterinary Nutrition).
 - Target on the chart: calories = growth maintenance × scale [chosen]. With `ratio = asked gain ÷ typical gain`: scale is `0.85 + 0.15 × ratio` up to a typical gain, then `1 + 0.25 × min(1, (ratio − 1) ÷ 2)`, so it reaches 1.25 only at 3 × typical. The picker and the saved goal use the same number. Typical gain is the gain of the same percentile over the same days.
+- Growth target limit (our choice, no published limit): beyond the pet's own typical gain over the same days, extra gain above 1% of body weight a week (0.7% for size V and VI) is a caution, and above 2% (1.4%) is not allowed: the picker stops there and the pace shows "too fast". Example: Tiger, size V, 9 months, 20 kg, 90 days: typical +0.6 kg, caution above +2.4 kg, picker stops at 24.1 kg, so 28.5 kg cannot be chosen. Not applied under 3 months (the curves are not valid there). The old rule allowed 3% of body weight a week on top of twice the typical gain, which let +8.5 kg through as "a typical track".
 - Big-shift warning: gaining much more than a typical track, or moving more than 30 percentile points per month, shows a caution.
 - Large-breed puppies: calcium maximum 4.5 g per 1,000 kcal (AAFCO).
 
@@ -97,6 +106,22 @@ So a figure near 700 kcal is what a neutered, normally active, healthy dog of ab
 ## 7. Goal match score (food ranking)
 
 - Lose: `protein + 1.5 × fibre − kcal per kg ÷ 60` (per 1,000 kcal values). Gain: `kcal per kg ÷ 50 + fat`. These ranking weights are **chosen**, they only order foods.
+
+## 7b. How vets set weight loss and gain (researched 2026-10-22)
+
+- **Loss:** a fixed share of resting energy, then recheck. The APOP step-based planner uses 80% of RER (options 70 to 90%; below 70% needs a veterinary nutritionist), recalculated from the newly measured weight each step, rechecks every 2 to 4 weeks. Target loss is about 3 to 5% of body weight a month for dogs (0.7 to 1.2% a week) and 2 to 5% a month for cats. If loss is off target, check intake and treats first, then change calories by 5 to 10%. Treats stay at or under 10% of daily calories. AAHA 2021 (Box 1) uses 1.0 x RER (dog) and 0.8 x RER (cat) at ideal weight, which is what we use.
+- **7,700 kcal per kg is not part of the vet method.** Vets do not predict a date from it; they feed a set share of RER and adjust from weigh-ins. We keep it only for the "about how long" estimate and label it as a rough estimate.
+- **Gain:** no standard formula found. Sources say a vet sets the target weight, the surplus and the pace after checking for illness, and that food should rise gradually. Our gain number is an estimate only.
+- **Our dog pace band (1 to 2% a week, AAHA 2014 summary) is faster than the APOP range (0.7 to 1.2% a week).** Not changed yet; see the decision in the review notes.
+- **Units:** the unit is the kilocalorie (kcal). The "Calories" printed on pet food labels are kcal. The app now writes kcal beside every number.
+
+## 7c. Homemade mix builder (added 2026-10-22)
+
+- Ingredients: 75 curated foods from USDA FoodData Central (SR Legacy 2018 and Foundation Foods 2026-04, public domain), per 100 g of the food as USDA lists it (raw foods raw, cooked foods cooked), plus water (0 kcal) and calcium carbonate (40% calcium by mass, a chemical fact, not USDA). Built by `supabase/scripts/build_ingredients.py` (each entry names its exact USDA description) into `ref.ingredients` (cloud project loaded and checked) and `prototype/js/ingredients-data.js`.
+- Mix kcal per 100 g = sum(grams × kcal per 100 g ÷ 100) ÷ total grams × 100. Percent mode turns each percent into grams of a batch (default 1,000 g); calories per 100 g do not depend on the batch size. If the percents do not add to 100, the numbers describe only what is listed and the screen says so.
+- Checks: protein, fat, calcium and phosphorus per 1,000 kcal against the same AAFCO targets as foods; calcium or phosphorus that USDA does not report is "not verified", never zero; calcium to phosphorus 1:1 to 2:1 for dogs.
+- Adding a mix to the diet saves its kcal per kg and its ingredient list with the diet item (`pet_diet_items.kcal_per_kg`, `recipe`), and the diet total counts it. A typed food can also carry an optional kcal per 100 g.
+- It is a calculator, not a complete diet: vitamins, trace minerals, essential fatty acids (and taurine for cats) are not checked. Raw meat, fish and eggs show a food-safety note. Test cases: `node supabase/golden/run_mix.mjs`.
 
 ## 8. Review log
 

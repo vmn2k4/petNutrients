@@ -121,16 +121,14 @@ def main():
 
     # ---- offers and feeding guides ----
     offers = list(csv.DictReader(open(D / 'offers.csv', encoding='utf-8'))); guides = list(csv.DictReader(open(D / 'feeding_guides.csv', encoding='utf-8')))
-    touched = {r['id'] for r in insert} | {dropped.get(i, i) for i in dropped} | set(updates)
-    have_off = collections.defaultdict(set)
-    if touched & set(cloud):
-        ids = "'" + "','".join(i.replace("'", "''") for i in touched & set(cloud)) + "'"
-        for o in q(f'select product_id, retailer, url from catalog.offers where product_id in ({ids})'): have_off[o['product_id']].add((o['retailer'], o['url']))
+    # Offers: every offer in the file whose product is (or is about to be) in the cloud and that the cloud does not have yet, keyed on
+    # (product, retailer, url). Offers of a merged-away row move to the kept row. This also repairs a run that stopped half way.
+    ins_all = {r['id'] for r in insert}; have_off = collections.defaultdict(set)
+    for o in q('select product_id, retailer, url from catalog.offers'): have_off[o['product_id']].add((o['retailer'], o['url']))
     off_rows = []; seen = set()
     for o in offers:
         pid = dropped.get(o['product_id'], o['product_id'])
-        if pid not in {r['id'] for r in insert} and pid not in cloud: continue
-        if o['product_id'] in cloud and o['product_id'] not in dropped: continue          # an existing product's own offers are already there
+        if pid not in cloud and pid not in ins_all: continue
         key = (pid, o['retailer'], o['url'])
         if key in seen or (o['retailer'], o['url']) in have_off.get(pid, set()): continue
         seen.add(key); off_rows.append({**o, 'product_id': pid})

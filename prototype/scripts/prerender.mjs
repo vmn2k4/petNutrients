@@ -88,7 +88,10 @@ async function main() {
 
   blankConfig();
   const server = spaServer().listen(PORT);
-  const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome' });
+  // Locally: CHROME or /usr/bin/google-chrome. On Vercel's build machine there is no Chrome, so use the small Chromium from @sparticuz/chromium.
+  let launch = { executablePath: process.env.CHROME || '/usr/bin/google-chrome' };
+  if (process.env.VERCEL && !process.env.CHROME) { const sp = (await import('@sparticuz/chromium')).default; launch = { executablePath: await sp.executablePath(), args: sp.args, headless: true }; }
+  const browser = await chromium.launch(launch);
   const routes = [...PUBLIC];
   const metaIndex = [];
 

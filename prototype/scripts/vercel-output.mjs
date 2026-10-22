@@ -11,7 +11,7 @@ writeFileSync(`${out}config.json`, JSON.stringify({
     { src: '/assets/(.*)', headers: { 'Cache-Control': 'public, max-age=31536000, immutable' }, continue: true },
     { src: '/css/(.*)', headers: { 'Cache-Control': 'public, max-age=86400' }, continue: true },
     { handle: 'filesystem' },
-    { src: '/(.*)', dest: '/index.html' },
+    { src: '/(.*)', dest: '/' },
   ],
 }, null, 2));
 console.log('Build Output written to .vercel/output');

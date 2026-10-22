@@ -42,7 +42,8 @@ export function foodCard(food, ctx) {
     ${fit && fit.warn.length ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-${fit.warn[0].level === 'bad' ? 'bad' : 'caution'})">${icon(fit.warn[0].level === 'bad' ? 'x' : 'alert')} ${esc(fit.warn[0].text)}</p>` : ''}
   `;
   const buy = food.buyUrl ? `<a class="fc__buy" href="${esc(food.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${food.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(food.buyRetailer || 'a retailer')}</span></a>` : '';
-  return `<div class="fcwrap">${card(inner, { href: `/food/${food.id}` })}${buy}</div>`;
+  const addb = `<button type="button" class="fc__buy" ${isSignedIn() ? `data-fadd="${food.id}"` : 'data-signup data-then="/foods"'}>${icon('plus')}<span>Add to diet</span></button>`;
+  return `<div class="fcwrap">${card(inner, { href: `/food/${food.id}` })}${addb}${buy}</div>`;
 }
 
 // The pet this page works with: the saved profile, or a logged-out visitor's quick details (this tab only).
@@ -506,6 +507,7 @@ export function render() {
         if (k !== 'food') root.querySelector('#extraview').innerHTML = extraHtml(makeCtx());
       };
       root.addEventListener('click', (e) => {
+        const fa = e.target.closest('[data-fadd]'); if (fa) { const fd = listFoods().find((x) => x.id === fa.dataset.fadd); if (fd && getPet()) openAddItem(getPet(), 'food', fd, () => {}); return; }
         const kt = e.target.closest('[data-kind-tab]'); if (kt) { setKind(kt.dataset.kindTab); return; }
         const xt = e.target.closest('[data-xtype]'); if (xt) { state.xtype = xt.dataset.xtype; state.xshown = 48; root.querySelectorAll('[data-xtype]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.xtype === state.xtype))); extraOut(); return; }
         if (e.target.closest('#xmore')) { state.xshown += 48; extraOut(); return; }

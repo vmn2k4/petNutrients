@@ -2,6 +2,7 @@ import { getFood, listReviews, addReview, getSaved, toggleSaved, isSignedIn } fr
 import { brandGuide, foodFit, NUTRIENTS, gramsPerDay, costPerDay, TOXIC_TERMS, allergenHits } from '../domain.js';
 import { KCAL_NOTE, foodPic, card, badge, stars, meter, verdictBanner, button, icon, esc, notice, ratingInput, field, stat, pageBand, emptyState, expNote } from '../ui.js';
 import { makeCtx } from './foods.js';
+import { openAddItem } from '../diet.js';
 
 const TITLES = { good: 'Meets the nutrient targets', caution: 'Worth a closer look', bad: 'Not the best match' };
 let bowlView = true; // default: this pet's daily bowl; false = per 1000 kcal
@@ -55,6 +56,7 @@ export function render({ id }) {
                 <table class="small" style="width:100%"><thead><tr><th align="left">Weight</th><th align="left">Per day</th></tr></thead><tbody>${rows.map((r) => `<tr${bg && bg.covers && bg.row === r ? ' style="font-weight:600"' : ''}><td>${esc(r.weight_label)}</td><td>${gtxt(r)}</td></tr>`).join('')}</tbody></table>
                 <p class="hint">From the maker's label${rows[0].source_url ? ` (<a href="${esc(rows[0].source_url)}" target="_blank" rel="noopener noreferrer">page</a>)` : ''}. A starting point: adjust by body condition and check with your vet.</p>`; })()}
             ${food.buyUrl ? button({ label: `${food.buyType === 'search' ? 'Search for it at' : 'Buy at'} ${food.buyRetailer || 'a retailer'}`, href: food.buyUrl, variant: 'primary', iconName: 'cart', block: true, attrs: 'target="_blank" rel="noopener noreferrer sponsored"' }) : ''}
+            ${isSignedIn() && pet ? button({ label: 'Add to diet', variant: 'primary', iconName: 'plus', attrs: 'id="adddiet"', block: true }) : button({ label: 'Add to diet', variant: 'primary', iconName: 'plus', attrs: `data-signup data-then="/food/${food.id}"`, block: true })}
             ${button({ label: getSaved().includes(food.id) ? 'Saved' : 'Save food', variant: 'secondary', iconName: 'heart', attrs: 'id="save"', block: true })}`)}
           ${button({ label: 'Compare with a food you have', href: '/scan', variant: 'ghost', iconName: 'scan' })}
           ${notice('Nutrition numbers come from the maker\'s label for another country, so check them against your bag. Ingredient lists may be partial.', 'caution')}
@@ -72,6 +74,7 @@ export function render({ id }) {
       });
       }
       root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { bowlView = b.dataset.view === 'bowl'; rerender(); }));
+      root.querySelector('#adddiet')?.addEventListener('click', () => { if (isSignedIn() && pet) openAddItem(pet, 'food', food, () => {}); });
       root.querySelector('#save')?.addEventListener('click', (e) => { if (!isSignedIn()) { e.currentTarget.setAttribute('data-signup', ''); return; } toggleSaved(food.id); rerender(); });
     },
   };

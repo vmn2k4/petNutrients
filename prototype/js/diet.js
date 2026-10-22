@@ -64,7 +64,7 @@ const MODES = [['replace', 'Replace a food'], ['add', 'Add a food'], ['amount', 
 
 // Opens the add sheet for a treat or supplement picked elsewhere (Find food), with the product already chosen.
 export function openAddItem(pet, kind, item, rerender) {
-  openChange(pet, 'add', null, rerender, kind === 'supplement' ? { supplement: true, prefill: item } : { treat: true, prefill: item });
+  openChange(pet, 'add', null, rerender, kind === 'supplement' ? { supplement: true, prefill: item } : kind === 'treat' ? { treat: true, prefill: item } : { prefill: item });
 }
 
 export function mountDiet(root, pet, rerender) {
@@ -108,6 +108,12 @@ function openChange(pet, startMode, itemId, rerender, opts = {}) {
     onMount: (body, close) => {
       mountCombos(body);
       if (opts.prefill) { const pi = body.querySelector('#dc-food'); pi.value = foodLabel(opts.prefill); pi.dispatchEvent(new Event('change', { bubbles: true })); }
+      // a food picked elsewhere: suggest an amount from the pet's calorie plan (our estimate, two meals a day) so it is one tap to save
+      if (opts.prefill && !sup && !tre && opts.prefill.kcalPerKg) {
+        const pl = energyPlan(pet); const meals = 2;
+        if (!pl.hideKcal) { const perMeal = Math.round((pl.kcal / opts.prefill.kcalPerKg) * 1000 / meals); body.querySelector('#dc-amount').value = perMeal; body.querySelector('#dc-unit').value = 'g'; body.querySelector('#dc-times').value = String(meals);
+          const hint = document.createElement('p'); hint.className = 'hint'; hint.style.margin = '0'; hint.textContent = `Suggested from ${pet.name}'s calorie plan (about ${Math.round(pl.kcal)} kcal a day): ${perMeal} g, ${meals} times a day. Change it if the bag or your vet says otherwise.`; body.querySelector('#dc-err').before(hint); }
+      }
       if (tre) {
         body.querySelector('#dc-times').value = '1';
         const hint = body.querySelector('#dc-treat-hint'); const plan = energyPlan(pet); const kcal = plan.hideKcal ? null : plan.kcal;

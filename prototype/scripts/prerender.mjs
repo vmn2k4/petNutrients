@@ -85,6 +85,8 @@ async function main() {
   for (const f of ['robots.txt', 'sitemap.xml', 'vercel.json', '_redirects', '404.html']) {
     if (existsSync(join(ROOT, f))) cpSync(join(ROOT, f), join(DIST, f));
   }
+  // The source sitemap and robots.txt carry the example.com placeholder: point them at the real site when SITE_URL is set.
+  if (SITE !== 'https://example.com') for (const f of ['robots.txt', 'sitemap.xml']) { const fp = join(DIST, f); if (existsSync(fp)) writeFileSync(fp, readFileSync(fp, 'utf8').replaceAll('https://example.com', SITE)); }
 
   blankConfig();
   const server = spaServer().listen(PORT);

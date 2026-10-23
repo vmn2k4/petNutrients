@@ -46,6 +46,7 @@ dependencies:
   google_sign_in: ^7.2.0
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.14.4
   flutter_test:
     sdk: flutter
 
@@ -66,3 +67,10 @@ flutter:
     - assets/reference/
     - assets/images/
     - assets/content/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: "#FFD21F"
+  adaptive_icon_foreground: assets/icon/foreground.png

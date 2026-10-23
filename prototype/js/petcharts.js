@@ -13,13 +13,16 @@ const dotInfo = (pet, bands) => (p) => {
   return tipHtml([['Date', fmtDay(on)], ['Age', ageAt(pet, on)], ['Weight', `${round(p.kg, 1)} kg`], pc && ['Percentile', pc.edge === 'below' ? 'under 2nd' : pc.edge === 'above' ? 'over 98th' : ordinal(pc.value)]]);
 };
 
+// One point per day: if a pet was weighed more than once on the same date, the chart shows the latest, so a correction does not draw a line or a stray dot.
+const onePerDay = (logs) => { const m = new Map(); (logs || []).forEach((l) => m.set(l.on, l)); return [...m.values()]; };
+
 // Growing pets get the growth curve; fully grown pets get weight over time.
 export const chartKind = (pet) => (ageInMonths(pet.birth) > (pet.species === 'cat' ? 21 : 35) ? 'weight' : 'growth');
 
 export function growthChartOpts(pet) {
   const months = ageInMonths(pet.birth); const limit = pet.species === 'cat' ? 21 : 35;
   // each weigh-in at its real age (worked out in days, shown to people only as months), so weeks within a month spread out
-  const pts = (pet.logs || []).slice().sort((a, b) => (a.on < b.on ? -1 : 1))
+  const pts = onePerDay((pet.logs || []).slice().sort((a, b) => (a.on < b.on ? -1 : a.on > b.on ? 1 : 0))).sort((a, b) => (a.on < b.on ? -1 : 1))
   .map((l) => ({ m: monthsExact(pet.birth, l.on), kg: l.kg, on: l.on })).filter((p) => p.m <= limit);
   const last = pts[pts.length - 1];
   if (!last || Math.abs(last.kg - pet.weightKg) > 0.001) pts.push({ m: monthsExact(pet.birth), kg: pet.weightKg, on: new Date().toISOString().slice(0, 10) });
@@ -31,6 +34,6 @@ export function growthChartOpts(pet) {
 export function weightChartOpts(pet) {
   const plan = energyPlan(pet); const b = pet.species === 'dog' && pet.breed ? DOG_BREEDS.find((x) => x.name === pet.breed) : null;
   const ideal = Math.abs(plan.ideal - pet.weightKg) > 0.3 ? plan.ideal : null;
-  const logs = pet.logs && pet.logs.length ? pet.logs : [{ on: new Date().toISOString().slice(0, 10), kg: pet.weightKg }];
+  const logs = pet.logs && pet.logs.length ? onePerDay(pet.logs) : [{ on: new Date().toISOString().slice(0, 10), kg: pet.weightKg }];
   return { points: logs, pointInfo: dotInfo(pet, null), projection: projectTrend(pet), marks: dietMarks(pet, (d) => ({ t: new Date(`${d}T00:00:00Z`).getTime() })), idealKg: ideal, range: b ? { min: b.min, max: b.max } : null, label: pet.name, title: `${pet.name} weight over time` };
 }

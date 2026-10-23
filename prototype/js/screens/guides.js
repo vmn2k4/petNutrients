@@ -22,13 +22,13 @@ const block = ([type, v]) => {
 
 export function article({ slug }) {
   const g = guideBySlug(slug);
-  if (!g) return { title: 'Guide not found', html: `${pageBand('Guide not found', 'It may have moved.')}<div class="page page--narrow">${button({ label: 'All guides', href: '/guides', iconName: 'arrow' })}</div>` };
+  if (!g) return { title: 'Guide not found', robots: 'noindex, nofollow', html: `${pageBand('Guide not found', 'It may have moved.')}<div class="page page--narrow">${button({ label: 'All guides', href: '/guides', iconName: 'arrow' })}</div>` };
   const related = (g.related || []).map(guideBySlug).filter(Boolean);
   const crumbs = [{ name: 'Home', path: '/' }, { name: 'Guides', path: '/guides' }, { name: esc(g.title), path: `/guides/${g.slug}` }];
   const articleLd = { '@context': 'https://schema.org', '@type': 'Article', headline: g.title, description: g.summary,
-    mainEntityOfPage: absUrl(`/guides/${g.slug}`), image: absUrl(OG_IMAGE),
+    mainEntityOfPage: absUrl(`/guides/${g.slug}`), image: absUrl(`/assets/${g.art}.webp`),
     datePublished: g.published || '2026-10-21', dateModified: g.reviewed || '2026-10-21',
-    author: { '@type': 'Organization', name: 'TODO: author name' }, publisher: { '@type': 'Organization', name: 'Pet Nutrition Matcher' } };
+    author: { '@type': 'Organization', name: 'Pet Nutrition Matcher', url: absUrl('/') }, publisher: { '@type': 'Organization', name: 'Pet Nutrition Matcher' } };
   let faqLd = '';
   if (g.faq) {
     const start = g.blocks.findIndex((b) => b[0] === 'h2' && /frequently asked/i.test(b[1]));
@@ -37,7 +37,7 @@ export function article({ slug }) {
     if (qa.length) faqLd = `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: qa }).replace(/</g, '\\u003c')}</script>`;
   }
   return {
-    title: g.title,
+    title: g.title, description: g.summary, image: { src: `/assets/${g.art}.webp`, alt: g.title },
     html: `${pageBand(g.title, g.summary, '', g.art)}<div class="page page--narrow">${crumbsHtml(crumbs)}${faqLd}<script type="application/ld+json">${JSON.stringify(articleLd)}</script><script type="application/ld+json">${JSON.stringify(breadcrumbLd(crumbs))}</script><a class="btn btn--ghost" href="/guides" style="margin:0 0 var(--space-4) calc(var(--space-4) * -1)">${icon('back')}<span>All guides</span></a>
       <p class="small muted">${g.minutes} min read. Last reviewed 21 Oct 2026. ${GUIDE_DISCLAIMER}</p>
       <article class="prose">${g.blocks.map(block).join('')}</article>

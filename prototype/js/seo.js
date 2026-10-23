@@ -1,28 +1,46 @@
 // SITE CONFIG: one place to set the public domain for canonical, OG, sitemap and JSON-LD.
-// TODO: replace with the real production domain before launch.
 export const SITE = 'https://munaruna.com';
 
-export const DEFAULT_DESC = "Build your dog or cat's profile and get foods that fit their age, weight, allergies and goals, with AAFCO checks and cost per day. Free.";
-export const DEFAULT_TITLE = 'Free Dog & Cat Food Matcher – Find the Right Food for Your Pet';
-export const OG_IMAGE = '/assets/hero-dog-cat.jpg';
-export const OG_IMAGE_ALT = 'A labrador puppy and a ginger kitten sitting together';
+export const DEFAULT_DESC = "Free pet diet tracker for dogs and cats: daily calorie and nutrient targets, food nutrition per 1000 kcal vs AAFCO, growth chart and weight tracking, cost per day.";
+export const DEFAULT_TITLE = 'Pet Diet Tracker: Dog & Cat Food Nutrition, Calories & Weight';
+export const OG_IMAGE = '/assets/og-home.jpg';
+export const OG_IMAGE_ALT = 'A golden retriever and a ginger cat sitting beside their food bowls';
+
+/** Share image per route (path under /assets, alt text, size when known). A screen can override with view.image = { src, alt }. */
+const IMG = (src, alt, w, h) => ({ src, alt, w, h });
+export const IMAGE_BY_PATH = [
+  [/^\/new\/?$/, IMG('/assets/cut-puppy.webp', 'A cartoon-style puppy cut-out')],
+  [/^\/foods\/?$/, IMG('/assets/og-foods.jpg', 'A golden retriever eating dry food and a tabby cat eating wet food', 1200, 630)],
+  [/^\/toxic\/?$/, IMG('/assets/cut-puppy.webp', 'A puppy sitting')],
+  [/^\/can-dogs-eat\//, IMG('/assets/cut-puppy.webp', 'A puppy sitting')],
+  [/^\/can-cats-eat\//, IMG('/assets/cut-kitten.webp', 'A kitten sitting')],
+  [/^\/recipe\/?$/, IMG('/assets/og-recipe.jpg', 'Chopped carrots, chicken and rice for a homemade dog meal while a beagle watches', 1200, 630)],
+  [/^\/growth\/?$/, IMG('/assets/og-growth.jpg', 'A puppy and a kitten standing on a pet scale', 1200, 630)],
+  [/^\/tools\/?$/, IMG('/assets/og-recipe.jpg', 'Chopped carrots, chicken and rice for a homemade dog meal while a beagle watches', 1200, 630)],
+  [/^\/guides\/?$/, IMG('/assets/store-aisle.jpg', 'A pet food aisle in a store')],
+];
+export const imageFor = (path, view) => {
+  if (view?.image) return view.image;
+  const hit = IMAGE_BY_PATH.find(([re]) => re.test(path));
+  return hit ? hit[1] : IMG(OG_IMAGE, OG_IMAGE_ALT, 1200, 630);
+};
 
 /** Paths that must not be indexed (owner-specific / private). */
 export const NOINDEX = [/^\/pet(\/|$)/, /^\/account(\/|$)/];
 
 export const SEO_BY_PATH = [
-  [/^\/new\/?$/, { title: 'Dog & Cat Food Finder – Match by Breed, Age & Weight', desc: 'Answer 3 quick questions about your dog or cat and get food matches for their age, size, weight and needs. Free, no account needed.' }],
-  [/^\/foods\/?$/, { title: 'Dog & Cat Food Compared by Fit and Cost per Day', desc: 'Dog and cat foods ranked by fit for your pet, AAFCO nutrient checks and cost per day. Filter by goal, allergies, format and extras.' }],
-  [/^\/food\//, { title: null, desc: 'See what is in this pet food per 1000 kcal, how it compares with AAFCO targets, daily portions, and what other owners say.' }],
-  [/^\/scan\/?$/, { title: 'Label scanner: coming soon', desc: 'The pet food label scanner is not ready yet. Use the food finder to compare foods.' }],
+  [/^\/new\/?$/, { title: 'Dog & Cat Food Finder – Match by Breed, Age & Weight', desc: 'Answer 3 quick questions about your dog or cat and get food matches for their age, size, weight and needs. Free to try.' }],
+  [/^\/foods\/?$/, { title: 'Dog & Cat Food Nutrition Comparison – Protein, Fat, Cost/Day', desc: 'Compare dog and cat food nutrition per 1000 kcal: protein, fat, calcium, phosphorus vs AAFCO, plus cost per day. Filter by goal, allergies, format and extras.' }],
+  [/^\/food\//, { robots: 'noindex, follow', title: null, desc: 'See what is in this pet food per 1000 kcal, how it compares with AAFCO targets, daily portions, and what other owners say.' }],
+  [/^\/scan\/?$/, { robots: 'noindex, follow', title: 'Label scanner: coming soon', desc: 'The pet food label scanner is not ready yet. Use the food finder to compare foods.' }],
   [/^\/toxic\/?$/, { title: 'Can My Dog or Cat Eat This? Toxic Food Checker (Free)', desc: 'Type a food to see if it is safe, risky or toxic for dogs and cats before you share a snack. Can dogs eat grapes? Check here. Not vet advice.' }],
   [/^\/can-dogs-eat\//, { title: null, desc: null }],
   [/^\/can-cats-eat\//, { title: null, desc: null }],
   [/^\/recipe\/?$/, { title: 'Homemade Pet Food Mix Builder – Calories & AAFCO Gaps', desc: 'Cooking for your dog or cat? Mix real ingredients (USDA data) by percent or grams, see calories per 100 g, and check protein, fat, calcium and phosphorus against AAFCO targets.' }],
   [/^\/guides\/puppy-growth-chart\/?$/, { title: 'Puppy Growth Chart: How Big Will My Puppy Get?', desc: "Use a puppy growth chart to see your dog's weight percentile, estimate how big your puppy will get, and find daily calories for a safe goal. Kittens too." }],
   [/^\/guides\/?$/, { title: 'Dog & Cat Nutrition Guides – Labels, AAFCO, Feeding', desc: 'Plain-English guides to reading pet food labels, AAFCO profiles, puppy and kitten growth, healthy weight and home-cooked food.' }],
-  [/^\/tools\/?$/, { title: 'Free Pet Nutrition Tools – Growth Chart, Recipe Checker, Toxic Foods', desc: 'Free pet nutrition tools: homemade recipe checker, growth chart goal planner and toxic food checker for dogs and cats.' }],
-  [/^\/growth\/?$/, { title: 'Puppy & Kitten Growth Chart + Adult Weight Calculator', desc: "Track your puppy's or kitten's weight by week and see if they're on curve. Estimates adult size for purebred and mixed-breed puppies. Free." }],
+  [/^\/tools\/?$/, { title: 'Free Pet Nutrition Tools – Calorie Calculator, Growth Chart, Recipe Checker', desc: 'Free pet nutrition tools for dogs and cats: daily calorie calculator, growth chart and weight tracker, homemade recipe checker and toxic food checker.' }],
+  [/^\/growth\/?$/, { title: 'Puppy & Kitten Weight Tracker – Growth Chart & Calorie Goal', desc: "Pet weight tracker: log your puppy's or kitten's weight, see the growth percentile, estimate adult size and get a daily calorie goal. Dogs and cats. Free." }],
   [/^\/privacy\/?$/, { title: 'Privacy Policy – Pet Nutrition Matcher', desc: 'What Pet Nutrition Matcher collects (pet profiles, weigh-ins, reviews), why, who processes it, your rights under PIPEDA, GDPR and CCPA, and how to delete your data.' }],
   [/^\/terms\/?$/, { title: 'Terms and Conditions – Pet Nutrition Matcher', desc: 'Terms for using Pet Nutrition Matcher: general information only, not veterinary advice, user reviews, no warranties, liability limits and BC governing law.' }],
   [/^\/disclaimer\/?$/, { title: 'Medical & Data Disclaimer – Pet Nutrition Matcher', desc: 'Our nutrition data, growth charts, calorie suggestions and food matches are experimental estimates, not veterinary advice. Check with your vet before acting.' }],
@@ -50,7 +68,8 @@ export function applySeo(path, view) {
   const conf = hit ? hit[1] : {};
   const title = conf.title || (view?.title?.length > 40 ? view.title : view?.title ? `${view.title} · Pet Nutrition Matcher` : DEFAULT_TITLE);
   const desc = conf.desc || view?.description || DEFAULT_DESC;
-  const robots = conf.robots || (NOINDEX.some((re) => re.test(path)) ? 'noindex, nofollow' : 'index, follow, max-image-preview:large');
+  const robots = conf.robots || view?.robots || (NOINDEX.some((re) => re.test(path)) ? 'noindex, nofollow' : 'index, follow, max-image-preview:large');
+  const img = imageFor(path, view);
   document.title = title;
   setMeta('name', 'description', desc);
   setMeta('name', 'robots', robots);
@@ -58,16 +77,21 @@ export function applySeo(path, view) {
   setMeta('property', 'og:description', desc);
   setMeta('property', 'og:url', absUrl(path));
   setMeta('property', 'og:type', path.startsWith('/guides/') ? 'article' : 'website');
-  setMeta('property', 'og:image', absUrl(OG_IMAGE));
-  setMeta('property', 'og:image:alt', OG_IMAGE_ALT);
+  setMeta('property', 'og:image', absUrl(img.src));
+  setMeta('property', 'og:image:alt', img.alt);
+  for (const [k, v] of [['og:image:width', img.w], ['og:image:height', img.h]]) {
+    const el = document.head.querySelector(`meta[property="${k}"]`);
+    if (v) setMeta('property', k, String(v)); else el?.remove();
+  }
+  setMeta('name', 'twitter:image:alt', img.alt);
   setMeta('name', 'twitter:card', 'summary_large_image');
   setMeta('name', 'twitter:title', title);
   setMeta('name', 'twitter:description', desc);
-  setMeta('name', 'twitter:image', absUrl(OG_IMAGE));
+  setMeta('name', 'twitter:image', absUrl(img.src));
   let c = document.head.querySelector('link[rel="canonical"]');
   if (!c) { c = document.createElement('link'); c.rel = 'canonical'; document.head.appendChild(c); }
   c.href = absUrl(path);
-  return { title, desc, robots, url: absUrl(path) };
+  return { title, desc, robots, url: absUrl(path), image: absUrl(img.src) };
 }
 
 export function breadcrumbLd(items) {

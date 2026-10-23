@@ -13,7 +13,7 @@ const reviewItem = (r) => `<article class="card card--flat"><div class="row row-
 
 export async function render({ id }) {
   const food0 = getFood(id);
-  if (!food0) return { title: 'Not found', html: `${pageBand('Hmm, that food is missing', 'It may have been renamed or removed.')}<div class="page page--narrow">${emptyState({ img: 'cut-kitten', title: 'We sniffed everywhere, no luck', text: 'Try browsing the list instead.', action: button({ label: 'Back to foods', href: '/foods' }) })}</div>` };
+  if (!food0) return { title: 'Not found', robots: 'noindex, nofollow', html: `${pageBand('Hmm, that food is missing', 'It may have been renamed or removed.')}<div class="page page--narrow">${emptyState({ img: 'cut-kitten', title: 'We sniffed everywhere, no luck', text: 'Try browsing the list instead.', action: button({ label: 'Back to foods', href: '/foods' }) })}</div>` };
   // calc works out the fit, the calories (an estimate from the label analysis when the maker states none), the daily amount and cost, and the maker's table
   const pet = getPet() || peekQuickPet() || null;
   const d = await calc('foodDetail', pet, id, getRegion());
@@ -25,6 +25,7 @@ export async function render({ id }) {
   const flagged = (ing) => !!d.flagged[food.ingredients.indexOf(ing)];
   return {
     title: `${food.brand} ${food.name} Review: Calories, AAFCO & Cost per Day`,
+    image: { src: food.img, alt: `${food.brand} ${food.name}`, w: 480, h: 480 },
     html: `${pageBand(food.name, `${esc(food.brand)}${food.reviews ? `, ${stars(food.rating)} ${food.rating} from ${food.reviews} owners` : ', no owner reviews yet'}`, `<div class="chips" style="margin-top:var(--space-4)">${badge(food.format, 'info')}${badge(food.species)}${badge(`Source: ${food.source}`, '')}</div>`, food.species === 'cat' ? 'cut-cat' : 'cut-beagle')}<div class="page">${expNote(' Food data can be wrong or out of date: check the label on the bag.')}<a class="btn btn--ghost" href="/foods" style="margin: 0 0 var(--space-5) calc(var(--space-4) * -1)">${icon('back')}<span>All foods</span></a>
       <div class="split split--sidebar">
         <div class="stack">

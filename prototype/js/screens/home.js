@@ -41,14 +41,15 @@ export async function render() {
     ['Kittens', '/assets/cut-kitten-480.webp', 'soft', '/foods?species=cat&stage=growth'],
   ];
   return {
-    title: 'Free Dog & Cat Food Matcher – Find the Right Food for Your Pet',
+    title: 'Pet Diet Tracker: Dog & Cat Food Nutrition, Calories & Weight',
+    description: 'Free pet diet tracker for dogs and cats: daily calorie and nutrient targets, food nutrition per 1000 kcal vs AAFCO, growth chart and weight tracking, cost per day.',
     html: `<div class="home">
       <section class="hero-y">
         ${doodle('bone', 'left:46%;top:12%;transform:rotate(35deg);font-size:4rem')}${doodle('paw', 'left:8%;top:9%;font-size:3rem')}${doodle('fish', 'left:40%;bottom:24%;transform:rotate(-20deg);font-size:3rem')}${doodle('bowl', 'right:3%;top:30%;transform:rotate(12deg);font-size:5rem')}
         <div class="wrap hero-y__grid">
           <div class="reveal">
-            <h1>The right food for your dog or cat, in 2 minutes.</h1>
-            <p class="hero-y__sub">Tell us about your pet. We match foods to their age, size and needs, and show you why. Free to use.</p>
+            <h1>Pet diet and food nutrition tracker for your dog or cat.</h1>
+            <p class="hero-y__sub">Get daily calories and nutrient targets, match foods to their age, size and needs, and track weight and growth. Free to use.</p>
             <div class="hero-actions"><div class="hero-actions__row">${button({ label: out ? 'See their growth chart' : cta.label, href: out ? '/growth' : cta.href, variant: 'dark', iconName: out ? 'chart' : 'arrow' })}${button({ label: 'Find food', href: '/foods', variant: 'white', iconName: 'bowl' })}</div>${getAccount().saved ? '' : `<div class="hero-actions__row">${button({ label: 'Log in', variant: 'outline', attrs: 'data-login' })}${button({ label: 'Sign up', variant: 'outline', attrs: 'data-signup data-then="/new"' })}</div>`}</div>
           </div>
           <div class="hero-y__art reveal" style="--d:120ms"><img src="/assets/cut-pair-480.webp" srcset="/assets/cut-pair-480.webp 480w, /assets/cut-pair.webp 836w" sizes="(max-width: 760px) 90vw, 760px" width="760" height="760" alt="A labrador puppy and a ginger kitten sitting together" fetchpriority="high"></div>

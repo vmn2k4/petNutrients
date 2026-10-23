@@ -10,7 +10,7 @@ export function render({ species, slug }) {
   const petWord = species === 'dog' ? 'dogs' : 'cats';
   const Pet = species === 'dog' ? 'Dogs' : 'Cats';
   if (!item) {
-    return { title: 'Food not in our list', html: `${pageBand('Not in our list yet', 'We only publish pages for foods we have checked against published sources.')}<div class="page page--narrow"><p><a href="/toxic">Back to the toxic food checker</a></p></div>` };
+    return { title: 'Food not in our list', robots: 'noindex, nofollow', html: `${pageBand('Not in our list yet', 'We only publish pages for foods we have checked against published sources.')}<div class="page page--narrow"><p><a href="/toxic">Back to the toxic food checker</a></p></div>` };
   }
   const verdict = item[species];
   const title = `Can ${Pet} Eat ${item.name}? Safe, Risky or Toxic`;
@@ -29,7 +29,7 @@ export function render({ species, slug }) {
   };
   const others = TOXIC_ITEMS.filter((i) => i.slug !== slug).slice(0, 5);
   return {
-    title, description: desc,
+    title, description: desc, image: { src: `/assets/${species === 'dog' ? 'cut-puppy' : 'cut-kitten'}.webp`, alt: `Can ${petWord} eat ${item.name.toLowerCase()}?` },
     html: `${pageBand(`Can ${petWord} eat ${item.name.toLowerCase()}?`, LABEL[verdict], '', species === 'dog' ? 'cut-puppy' : 'cut-kitten')}
       <div class="page page--narrow">${expNote()}
         ${crumbsHtml(crumbs)}

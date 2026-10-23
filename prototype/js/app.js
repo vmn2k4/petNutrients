@@ -123,7 +123,7 @@ async function resolve(path) {
     console.error('Screen failed to load:', e);
     return { title: 'Something went wrong', html: '<div class="page page--narrow"><h1>Something went wrong</h1><p class="muted">This page did not load. Your data is safe.</p><p><button class="btn btn--primary" type="button" onclick="location.reload()">Try again</button> <a class="btn btn--ghost" href="/">Go home</a></p></div>' };
   }
-  return { title: 'Page not found', html: '<div class="page"><h1>Page not found</h1><p class="muted">That page may have moved. Try the home page or search from Learn.</p><p><a class="btn btn--dark" href="/">Go home</a></p></div>', description: 'The page you asked for was not found on Pet Nutrition Matcher.' };
+  return { title: 'Page not found', html: '<div class="page"><h1>Page not found</h1><p class="muted">That page may have moved. Try the home page or search from Learn.</p><p><a class="btn btn--dark" href="/">Go home</a></p></div>', description: 'The page you asked for was not found on Pet Nutrition Matcher.', robots: 'noindex, nofollow' };
 }
 
 let showSeq = 0;

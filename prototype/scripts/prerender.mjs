@@ -13,7 +13,7 @@ import { chromium } from 'playwright';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
-const SITE = process.env.SITE_URL || 'https://example.com'; // TODO: set SITE_URL at build time
+const SITE = process.env.SITE_URL || 'https://munaruna.com'; // TODO: set SITE_URL at build time
 const PORT = 8799;
 
 const MIME = { '.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.webp':'image/webp','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.svg':'image/svg+xml','.txt':'text/plain','.xml':'application/xml','.woff2':'font/woff2' };
@@ -50,8 +50,8 @@ function loadToxic() {
 }
 
 const PUBLIC = [
-  '/', '/new', '/foods', '/privacy', '/terms', '/disclaimer', '/tools', '/recipe', '/toxic', '/growth', '/guides',
-  ...loadFoodIds().map((id) => `/food/${id}`),
+  '/', '/new', '/foods', '/scan', '/privacy', '/terms', '/disclaimer', '/tools', '/recipe', '/toxic', '/growth', '/guides',
+  // /food/<id> pages are client-rendered and noindex (the catalogue is live data), so they are not prerendered.
   ...loadGuideSlugs().map((s) => `/guides/${s}`),
   ...loadToxic().flatMap((s) => [`/can-dogs-eat/${s}`, `/can-cats-eat/${s}`]),
 ];
@@ -86,9 +86,9 @@ async function main() {
     if (existsSync(join(ROOT, f))) cpSync(join(ROOT, f), join(DIST, f));
   }
   // The source sitemap and robots.txt carry the example.com placeholder: point them at the real site when SITE_URL is set.
-  if (SITE !== 'https://example.com') for (const f of ['robots.txt', 'sitemap.xml']) { const fp = join(DIST, f); if (existsSync(fp)) writeFileSync(fp, readFileSync(fp, 'utf8').replaceAll('https://example.com', SITE)); }
+  if (SITE !== 'https://munaruna.com') for (const f of ['robots.txt', 'sitemap.xml']) { const fp = join(DIST, f); if (existsSync(fp)) writeFileSync(fp, readFileSync(fp, 'utf8').replaceAll('https://munaruna.com', SITE)); }
 
-  blankConfig();
+  // Keep the real config: Home, Foods and Food pages need the `calc` function to render. Every other Supabase call (auth, store) is aborted below so it fails fast.
   const server = spaServer().listen(PORT);
   // Locally: CHROME or /usr/bin/google-chrome. On Vercel's build machine there is no Chrome, so use the small Chromium from @sparticuz/chromium.
   let launch = { executablePath: process.env.CHROME || '/usr/bin/google-chrome' };
@@ -100,21 +100,22 @@ async function main() {
   for (const route of routes) {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
+    await page.route(/supabase\.co\/(?!functions\/v1\/calc)/, (r) => r.abort());
     page.on('pageerror', (e) => console.error('PAGEERROR', route, e.message));
     await page.goto(`http://127.0.0.1:${PORT}${route}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForSelector('#app h1, #app .page, #app .home', { timeout: 15000 }).catch(()=>{});
     await page.waitForTimeout(600);
     await page.evaluate(() => document.querySelectorAll('.reveal').forEach((e) => e.classList.add('is-in')));
     // Rewrite absolute SITE placeholder if env set
-    if (SITE !== 'https://example.com') {
+    if (SITE !== 'https://munaruna.com') {
       await page.evaluate((site) => {
         document.querySelectorAll('link[rel=canonical], meta[property="og:url"], meta[property="og:image"], meta[name="twitter:image"]').forEach((el) => {
           const attr = el.tagName === 'LINK' ? 'href' : 'content';
           const v = el.getAttribute(attr) || '';
-          el.setAttribute(attr, v.replace('https://example.com', site));
+          el.setAttribute(attr, v.replace('https://munaruna.com', site));
         });
         document.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
-          el.textContent = el.textContent.replaceAll('https://example.com', site);
+          el.textContent = el.textContent.replaceAll('https://munaruna.com', site);
         });
       }, SITE);
     }
@@ -128,7 +129,10 @@ async function main() {
     const outDir = route === '/' ? DIST : join(DIST, route.replace(/^\//, ''));
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html);
-    metaIndex.push({ route, title, desc });
+    const robots = (await page.locator('meta[name=robots]').getAttribute('content')) || '';
+    const image = await page.locator('meta[property="og:image"]').getAttribute('content');
+    const imageAlt = await page.locator('meta[property="og:image:alt"]').getAttribute('content');
+    metaIndex.push({ route, title, desc, image, imageAlt, robots });
     console.log('OK', route, title.slice(0, 60));
     await ctx.close();
   }
@@ -140,6 +144,11 @@ async function main() {
   await page.waitForTimeout(500);
   writeFileSync(join(DIST, '404.html'), inlineCss(await page.content()));
   await ctx.close();
+
+  // Sitemap generated from the routes actually rendered, with each page's share image (Google image sitemap).
+  const xml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const today = new Date().toISOString().slice(0, 10);
+  writeFileSync(join(DIST, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${metaIndex.filter((m) => !/noindex/.test(m.robots)).map((m) => `  <url><loc>${xml(SITE + (m.route === '/' ? '/' : m.route))}</loc><lastmod>${today}</lastmod>${m.image ? `<image:image><image:loc>${xml(m.image)}</image:loc>${m.imageAlt ? `<image:caption>${xml(m.imageAlt)}</image:caption>` : ''}</image:image>` : ''}</url>`).join('\n')}\n</urlset>\n`);
 
   writeFileSync(join(DIST, '_prerender.json'), JSON.stringify({ site: SITE, routes: metaIndex, builtAt: new Date().toISOString() }, null, 2));
   await browser.close();

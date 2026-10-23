@@ -25,6 +25,9 @@ Habit-forming means helpful and easy to return to, not manipulative.
 - Phone first: questions and filters open as bottom sheets. Scan (the in-store action, raised center tab) is hidden from navigation until label reading and barcode lookup really work (decided 2026-10-22); `/scan` shows a coming-soon page.
 - Evidence is thin: most engagement claims online are vendor blogs. Measure our own retention before adding more mechanics.
 
+## Mobile app rule: no prose above the action
+In `apps/mobile`, the top of every screen is the action or the chart: no intro paragraph, disclaimer, lede or long warning above the first control, chart or result. Put explanations behind an (i) icon in the app bar (opens a sheet), in a one-line tappable row that opens a sheet (vet notices), or at the bottom of the page. Safety information stays visible as a one-line row, never hidden. Check this on every new or changed screen.
+
 ## Architecture (hard rules)
 ```
 apps/web          Next.js screens only
@@ -42,10 +45,10 @@ data/             raw datasets
 
 ## Reuse for Flutter
 - React code is not reusable in Flutter. What is shared: DB schema and migrations, server functions, tokens, test vectors, component specs.
-- Important logic (calories, percentile lookup, nutrient matching, scoring) lives server-side as Postgres functions or Supabase Edge Functions so web and Flutter get identical results. `domain` holds only pure helpers for instant UI preview.
+- Important logic (calories, percentile lookup, nutrient matching, scoring, ranking) lives in ONE place: the `calc` Supabase Edge Function (`supabase/functions/calc`: `domain.js`, `foods.js`, `catalog.js`). Web (`prototype/js/calc.js`) and Flutter (`apps/mobile/lib/data/calc`) only call it and draw the answer; neither keeps a copy of any rule. Deploy with `node supabase/functions/build.mjs && supabase functions deploy calc`.
 - The DB plus its functions is the shared API. Generate types from the schema.
 - Components: same names, props and variants in React and Flutter.
-- Golden tests: shared JSON cases (e.g. the Labrador example in DATA_GUIDE section 4.3) must pass for `domain` and the server functions.
+- Golden tests: shared JSON cases (e.g. the Labrador example in DATA_GUIDE section 4.3) run against the function (`supabase/golden/run_*.mjs`); `prototype/scripts/test/render-screens.mjs` renders the web screens against it, and `apps/mobile/test/calc_contract_test.dart` checks the Flutter JSON.
 
 ## Theming and UI
 - No hard-coded colors, fonts, spacing, radii or shadows anywhere. Everything comes from `packages/tokens`.

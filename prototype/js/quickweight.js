@@ -2,7 +2,8 @@
 // Any element with data-quick-weight opens it; bindQuickWeight(root, onSaved) wires a screen once after render.
 import { openSheet, toast } from './sheet.js';
 import { getPet, addWeighIn } from './store.js';
-import { kgToLb, lbToKg, round, weightCheck } from './domain.js';
+import { kgToLb, lbToKg, round } from './format.js';
+import { calc } from './calc.js';
 import { button, esc } from './ui.js';
 
 const UNIT_KEY = 'pnm.unit';
@@ -45,10 +46,10 @@ export function openQuickWeight(onSaved) {
         const kg = toKg(read()); unit = r.value; writeUnit(unit);
         if (kg > 0) input.value = show(kg);
       }));
-      body.querySelector('#qw').addEventListener('submit', (e) => {
+      body.querySelector('#qw').addEventListener('submit', async (e) => {
         e.preventDefault(); const kg = toKg(read());
         if (!(kg > 0.1)) { err.textContent = 'Enter a weight.'; return; }
-        const wc = weightCheck(pet, kg); if (!wc.ok) { err.textContent = wc.message; return; }
+        const wc = await calc('weightCheck', pet, kg); if (!wc.ok) { err.textContent = wc.message; return; }
         addWeighIn(round(kg, 2), pet.bcs); close(); toast(`Saved ${show(kg)} ${unit}`); onSaved?.();
       });
     },

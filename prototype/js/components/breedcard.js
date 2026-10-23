@@ -1,7 +1,7 @@
 // BREED CARD: what the breed changes (growth curve, large-breed rules) and what it does not. Folded away on Profile.
 import { DOG_BREEDS, BREED_INFO } from '../reference.js';
 import { card, badge, esc, disclosure } from '../ui.js';
-import { round } from '../domain.js';
+import { round } from '../format.js';
 
 const exerciseHint = (pet) => {
   const hrs = BREED_INFO[pet.breed]?.ex; if (hrs == null) return null;

@@ -5,6 +5,7 @@
 // If Supabase is unreachable the app keeps working from localStorage alone.
 import { FOODS, REVIEWS } from './mock-data.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { run } from './calc.js';
 
 const KEY = 'pnm.v1';
 const AUTH_KEY = 'pnm.auth';
@@ -304,16 +305,13 @@ function newId() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now(
 export const getDiet = () => (isSignedIn() ? mem.pet?.diet || [] : []);
 // One call for every kind of change on one day: stop some foods (by id), start others. A start can say which stop it replaces.
 //   changeDiet({ date, stops: [id, ...], starts: [{ foodName, foodId?, role?, amount, unit, timesPerDay, replacesId?, note? }, ...] })
-export function changeDiet({ date, stops = [], starts = [] }) {
+export async function changeDiet({ date, stops = [], starts = [] }) {
   const pet = mem.pet; if (!pet) return { ok: false, message: 'No pet yet.' };
-  const diet = pet.diet || []; const t = today();
-  if (!date || date > t) return { ok: false, message: 'The date cannot be in the future.' };
-  if (date < (pet.birth || '0000')) return { ok: false, message: 'That is before your pet was born.' };
-  for (const id of stops) { const it = diet.find((x) => x.id === id); if (!it) return { ok: false, message: 'That food is not in the current diet.' }; if (date < it.startedOn) return { ok: false, message: `${it.foodName} was only added on ${it.startedOn}, so it cannot stop before that.` }; }
-  const stopped = diet.filter((x) => stops.includes(x.id)).map((x) => ({ ...x, endedOn: date }));
-  const fresh = starts.map((s) => ({ id: newId(), foodId: s.foodId || null, foodName: String(s.foodName).trim(), role: s.role || 'main', amount: Number(s.amount), unit: s.unit || 'g', timesPerDay: Number(s.timesPerDay) || 1, startedOn: date, endedOn: null, replacedId: s.replacesId || null, note: s.note || null, ...(Number(s.kcalPerKg) > 0 ? { kcalPerKg: Math.round(Number(s.kcalPerKg)) } : {}), ...(Number(s.kcalPerUnit) > 0 ? { kcalPerUnit: Math.round(Number(s.kcalPerUnit) * 10) / 10 } : {}), ...(Array.isArray(s.recipe) && s.recipe.length ? { recipe: s.recipe } : {}) }));
-  for (const it of fresh) { if (!it.foodName) return { ok: false, message: 'Add the name of the food.' }; if (!(it.amount > 0)) return { ok: false, message: 'Add how much they get at each meal.' }; if (!(it.timesPerDay > 0)) return { ok: false, message: 'Add how many times a day.' }; }
-  pet.diet = [...fresh, ...diet.map((x) => stopped.find((y) => y.id === x.id) || x)]; save();
+  // calc checks the change and returns the rows to save; the ids are made here so a retry saves the same rows
+  const r = await run('planDietChange', pet, { date, stops, starts, ids: starts.map(() => newId()), today: today() });
+  if (!r.ok) return r;
+  const { started: fresh, stopped } = r;
+  pet.diet = r.diet; save();
   sync(async () => {
     if (!petId) return;
     for (const it of stopped) await api(`pet_diet_items?id=eq.${it.id}`, { method: 'PATCH', body: { ended_on: date } });
@@ -323,20 +321,20 @@ export function changeDiet({ date, stops = [], starts = [] }) {
 }
 // Add or correct the calories of a food already in the diet, in place (no new history entry): the calories are a fact about the food,
 // not a change in what the pet eats. `kcal` is per 100 g when the item is measured in grams, otherwise per one unit (cup, can, piece...).
-export function setDietKcal(id, kcal) {
-  const pet = mem.pet; const it = pet?.diet?.find((x) => x.id === id); const v = Number(kcal);
+export async function setDietKcal(id, kcal) {
+  const pet = mem.pet; const it = pet?.diet?.find((x) => x.id === id);
   if (!it) return { ok: false, message: 'That food is not in the diet.' };
-  if (!(v > 0) || v > (it.unit === 'g' ? 950 : 5000)) return { ok: false, message: it.unit === 'g' ? 'Calories per 100 g should be between 1 and 950.' : 'Calories in one measure should be between 1 and 5,000.' };
-  if (it.unit === 'g') { it.kcalPerKg = Math.round(v * 10); delete it.kcalPerUnit; } else { it.kcalPerUnit = Math.round(v * 10) / 10; delete it.kcalPerKg; }
+  const r = await run('planDietKcal', it, kcal); if (!r.ok) return r;
+  if (r.kcalPerKg != null) { it.kcalPerKg = r.kcalPerKg; delete it.kcalPerUnit; } else { it.kcalPerUnit = r.kcalPerUnit; delete it.kcalPerKg; }
   save();
   sync(async () => { if (petId) await api(`pet_diet_items?id=eq.${it.id}`, { method: 'PATCH', body: { kcal_per_kg: it.kcalPerKg ?? null, kcal_per_unit: it.kcalPerUnit ?? null } }); });
   return { ok: true };
 }
 // Undo a whole change day (a wrong entry): remove what started that day and bring back what stopped that day.
-export function undoDietChange(date) {
+export async function undoDietChange(date) {
   const pet = mem.pet; if (!pet?.diet) return;
-  const removed = pet.diet.filter((x) => x.startedOn === date); const revived = pet.diet.filter((x) => x.endedOn === date && x.startedOn !== date);
-  pet.diet = pet.diet.filter((x) => x.startedOn !== date).map((x) => (x.endedOn === date ? { ...x, endedOn: null } : x)); save();
+  const { removed, revived, diet } = await run('planUndo', pet.diet, date);
+  pet.diet = diet; save();
   sync(async () => {
     if (!petId) return;
     for (const it of revived) await api(`pet_diet_items?id=eq.${it.id}`, { method: 'PATCH', body: { ended_on: null } });
@@ -360,35 +358,24 @@ export const getGoalHistory = () => (isSignedIn() ? mem.pet?.goalHistory || [] :
 // Set the goal. `draft` = { type, targetKg, days (from today), custom?, fromChart?, kcalOverride? }.
 // Same goal again keeps its original start and date. A change on the same day refines it quietly. A change on a later day
 // archives the old goal in the history (with its dates and the weight at the time), then starts the new one today.
-export function setGoal(draft, { outcome = 'replaced' } = {}) {
+export async function setGoal(draft, { outcome = 'replaced' } = {}) {
   const pet = mem.pet; if (!pet || !draft || !['grow', 'lose', 'gain', 'maintain'].includes(draft.type) || !Number.isFinite(Number(draft.targetKg)) || !(Number(draft.targetKg) > 0)) return null;
-  const t = today(); const prev = pet.goal?.targetDate ? pet.goal : null;
-  const next = { type: draft.type, targetKg: draft.targetKg, custom: draft.custom, fromChart: draft.fromChart, kcalOverride: draft.kcalOverride, days: Number(draft.days) || 90 };
-  Object.keys(next).forEach((k) => next[k] === undefined && delete next[k]);
-  next.startOn = t; next.startKg = pet.weightKg; next.targetDate = addDays(t, next.days);
-  if (prev) {
-    const sameKg = next.type === 'grow' && !next.custom && !prev.custom ? true : Math.abs((prev.targetKg || 0) - (next.targetKg || 0)) < 0.05;
-    if (next.type === prev.type && sameKg && next.targetDate === prev.targetDate) {   // nothing about the plan changed
-      pet.goal = { ...prev }; if (next.kcalOverride !== undefined) pet.goal.kcalOverride = next.kcalOverride; else delete pet.goal.kcalOverride;
-      save(); sync(async () => { if (petId) await api(`pets?id=eq.${petId}`, { method: 'PATCH', body: { goal: pet.goal } }); }); return pet.goal;
-    }
-    if (prev.startOn !== t) {
-      const h = { type: prev.type, startOn: prev.startOn, startKg: prev.startKg, targetKg: prev.targetKg, targetDate: prev.targetDate, endedOn: t, endKg: pet.weightKg, outcome };
-      pet.goalHistory = [h, ...(pet.goalHistory || [])].slice(0, 50);
-      sync(async () => { if (petId) await api('pet_goals', { method: 'POST', body: { ...archiveRow(h), pet_id: petId } }); });
-    }
+  const t = today();
+  const { goal, archived } = await run('planSetGoal', pet, { type: draft.type, targetKg: draft.targetKg, days: draft.days, custom: draft.custom, fromChart: draft.fromChart, kcalOverride: draft.kcalOverride, outcome, today: t });
+  if (archived) {
+    pet.goalHistory = [archived, ...(pet.goalHistory || [])].slice(0, 50);
+    sync(async () => { if (petId) await api('pet_goals', { method: 'POST', body: { ...archiveRow(archived), pet_id: petId } }); });
   }
-  pet.goal = next; pet.target = { kg: next.targetKg, days: next.days, date: next.targetDate, setOn: t }; save();
+  pet.goal = goal; pet.target = { kg: goal.targetKg, days: goal.days, date: goal.targetDate, setOn: goal.startOn }; save();
   sync(async () => { if (petId) await api(`pets?id=eq.${petId}`, { method: 'PATCH', body: { goal: pet.goal, target: pet.target } }); });
   return pet.goal;
 }
-export function clearGoal({ outcome = 'cleared' } = {}) {
+export async function clearGoal({ outcome = 'cleared' } = {}) {
   const pet = mem.pet; if (!pet?.goal) return;
-  const g = pet.goal; const t = today();
-  if (g.targetDate && g.startOn !== t) {
-    const h = { type: g.type, startOn: g.startOn, startKg: g.startKg, targetKg: g.targetKg, targetDate: g.targetDate, endedOn: t, endKg: pet.weightKg, outcome };
-    pet.goalHistory = [h, ...(pet.goalHistory || [])].slice(0, 50);
-    sync(async () => { if (petId) await api('pet_goals', { method: 'POST', body: { ...archiveRow(h), pet_id: petId } }); });
+  const { archived } = await run('planClearGoal', pet, { outcome, today: today() });
+  if (archived) {
+    pet.goalHistory = [archived, ...(pet.goalHistory || [])].slice(0, 50);
+    sync(async () => { if (petId) await api('pet_goals', { method: 'POST', body: { ...archiveRow(archived), pet_id: petId } }); });
   }
   delete pet.goal; pet.target = null; save();
   sync(async () => { if (petId) await api(`pets?id=eq.${petId}`, { method: 'PATCH', body: { goal: null, target: null } }); });

@@ -13,7 +13,7 @@
 .apphead__weight > div { display: grid; text-align: right; line-height: 1.1; }
 .apphead__weight strong { font: 600 var(--text-xl) var(--font-display); }
 .apphead__weight small { color: var(--color-fg-muted); }
-.apphead__alert { margin-bottom: var(--space-5); }
+.apphead__alert { margin-top: var(--space-7); }
 
 .pswitch { display: flex; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-3); margin-bottom: var(--space-2); scrollbar-width: none; }
 .pswitch::-webkit-scrollbar { display: none; }

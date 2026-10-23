@@ -1,28 +1,23 @@
-import { getRegion, REGIONS, listFoods, getPet, updatePet, isSignedIn, getQuickPet, setQuickPet, setGoal, getGoalHistory } from '../store.js';
-import { brandGuide, weightCheck, weightLossKcal, NUTRIENTS, NUTRIENT_HELP, GOALS, goalsFor, goalPlan, goalMatch, suggestDays, per1000, energyPlan, nutrientTargets, foodFit, costPerDay, gramsPerDay, round, lifeStage, rer, ageInMonths, targetBounds, allergenHits, ALLERGENS, SIZE_CATEGORIES, breedSize, lbToKg, effectiveGoal, goalProgress, fmtDay, todayStr, addDaysStr } from '../domain.js';
-import { KCAL_NOTE, foodPic, card, badge, verdictBadge, verdictBanner, stars, button, icon, esc, pageHead, emptyState, choiceGroup, selectField, field, expNote, comboField, mountCombos, sizeBlock, bindBreedSize } from '../ui.js';
+import { getRegion, REGIONS, listFoods, getPet, updatePet, isSignedIn, getQuickPet, setQuickPet, setGoal, getGoalHistory, listTreats, listSupplements, listReviews } from '../store.js';
+import { calc, calcMany } from '../calc.js';
+import { round, lbToKg, fmtDay, todayStr, addDaysStr } from '../format.js';
+import { NUTRIENT_HELP, GOALS, ALLERGENS, SIZE_CATEGORIES, breedSize, DOG_BREEDS } from '../reference.js';
+import { KCAL_NOTE, foodPic, card, badge, verdictBadge, verdictBanner, stars, button, icon, esc, pageHead, emptyState, choiceGroup, selectField, field, expNote, comboField, mountCombos, sizeBlock, bindBreedSize, notice, rootOn } from '../ui.js';
 import { toast, openSheet } from '../sheet.js';
-import { listTreats, listSupplements } from '../store.js';
-import { treatPlan, treatFit, ingredientWarnings, TOXIC_TERMS, supplementFits, supplementDose } from '../domain.js';
 import { openAddItem } from '../diet.js';
-import { notice, rootOn } from '../ui.js';
 import { bindQuickWeight } from '../quickweight.js';
 import { bindFields } from '../components/petfields.js';
-import { chartKind } from '../petcharts.js';
 import { targetPickerHtml, mountTargetPicker } from '../targetpicker.js';
-import { DOG_BREEDS } from '../reference.js';
 
 const VERDICT_TEXT = { good: 'Meets targets', caution: 'Check details', bad: 'Not a fit' };
-const ORDER = { good: 0, caution: 1, bad: 2 };
 const DAYS = [30, 60, 90, 120, 180, 270, 365];
 const fmt = (n, d = 1) => (n == null ? 'not reported' : n.toFixed(d));
 
-export function foodCard(food, ctx) {
-  const fit = ctx.pet ? foodFit(food, ctx.pet, ctx.plan, ctx.targets) : null;
-  const kcal = ctx.plan?.hideKcal ? null : ctx.goalKcal || ctx.plan?.kcal;
-  const g = kcal ? gramsPerDay(food, kcal) : null; const c = kcal ? costPerDay(food, kcal) : null;
-  const p = NUTRIENTS[0].get(food); const f = NUTRIENTS[1].get(food);
-  const m = ctx.match?.get(food.id);
+// `c` holds the numbers calc worked out for this food and pet (rankFoods): fit, daily amount and cost, nutrients per 1000 kcal, the maker's table, goal match.
+export function foodCard(food, c) {
+  const fit = c.fit; const kcal = c.kcal;
+  const g = c.grams; const cost = c.cost; const p = c.protein; const f = c.fat;
+  const m = c.match;
   const inner = `
     <div class="fc__img">${foodPic(food)}</div>
     <div class="row row--between">${fit ? verdictBadge(fit.verdict, VERDICT_TEXT[fit.verdict]) : badge(isSignedIn() ? 'Create a profile for fit' : 'Add your pet for fit')}${m?.top ? badge('Top pick for this goal', 'good', 'star') : badge(food.format, 'info')}</div>
@@ -33,14 +28,14 @@ export function foodCard(food, ctx) {
     ${m?.targets?.length ? `<ul class="tmatch" aria-label="Compared with your numbers">${m.targets.map((t) => `<li class="tmatch--${t.state}">${icon(t.state === 'on' ? 'check' : t.state === 'na' ? 'help' : 'info')}<span>${esc(t.text)}</span></li>`).join('')}</ul>` : ''}
     <dl class="fstats">${(() => {
       // grams in the pet's daily bowl; with no pet, in a 1,000 kcal day (about a 20 kg dog), with the grams of food that is
-      const ref = kcal || 1000; const grams = food.kcalPerKg ? gramsPerDay(food, ref) : null; const k = ref / 1000;
+      const ref = kcal || 1000; const grams = food.kcalPerKg ? c.gramsRef : null; const k = ref / 1000;
       const tail = kcal ? 'in the daily bowl' : 'in a 1,000 kcal day';
       const amt = (v) => (v == null ? 'not reported' : `<strong>${Math.round(v * k)} g</strong>`);
       const row = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
-      return `${row('Protein', amt(p))}${row('Fat', amt(f))}${grams ? row(kcal ? 'Food per day' : 'Food for that', `<strong>${Math.round(grams)} g</strong>`) : ''}${food.kcalPerKg ? row('Energy', `<strong>${Math.round(food.kcalPerKg / 10)}</strong> kcal/100 g`) : ''}${c ? row('Cost', `<strong>$${c.toFixed(2)}</strong>/day`) : ''}<p class="fstats__note">Protein and fat ${tail}.</p>`;
+      return `${row('Protein', amt(p))}${row('Fat', amt(f))}${grams ? row(kcal ? 'Food per day' : 'Food for that', `<strong>${Math.round(grams)} g</strong>`) : ''}${food.kcalPerKg ? row('Energy', `<strong>${Math.round(food.kcalPerKg / 10)}</strong> kcal/100 g`) : ''}${cost ? row('Cost', `<strong>$${cost.toFixed(2)}</strong>/day`) : ''}<p class="fstats__note">Protein and fat ${tail}.</p>`;
     })()}</dl>
-    ${(() => { const bg = ctx.pet ? brandGuide(food, ctx.pet.weightKg) : null;
-      return bg && !bg.covers ? `<p class="small muted" style="margin:var(--space-2) 0 0">The maker's table (${esc(bg.row.weight_label)}) does not cover ${Math.round(ctx.pet.weightKg * 10) / 10} kg. Check the bag.</p>` : bg ? `<p class="small" style="margin:var(--space-2) 0 0"><span class="muted">Maker's guide for ${esc(bg.row.weight_label)}:</span> <strong>${bg.grams ? `${Math.round(bg.grams[0])}${bg.grams[1] !== bg.grams[0] ? ` to ${Math.round(bg.grams[1])}` : ''} g a day` : esc(bg.text)}</strong></p>` : ''; })()}
+    ${(() => { const bg = c.guide; const petKg = c.petKg;
+      return bg && !bg.covers ? `<p class="small muted" style="margin:var(--space-2) 0 0">The maker's table (${esc(bg.row.weight_label)}) does not cover ${Math.round(petKg * 10) / 10} kg. Check the bag.</p>` : bg ? `<p class="small" style="margin:var(--space-2) 0 0"><span class="muted">Maker's guide for ${esc(bg.row.weight_label)}:</span> <strong>${bg.grams ? `${Math.round(bg.grams[0])}${bg.grams[1] !== bg.grams[0] ? ` to ${Math.round(bg.grams[1])}` : ''} g a day` : esc(bg.text)}</strong></p>` : ''; })()}
     ${fit && fit.warn.length ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-${fit.warn[0].level === 'bad' ? 'bad' : 'caution'})">${icon(fit.warn[0].level === 'bad' ? 'x' : 'alert')} ${esc(fit.warn[0].text)}</p>` : ''}
   `;
   const buy = food.buyUrl ? `<a class="fc__buy" href="${esc(food.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${food.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(food.buyRetailer || 'a retailer')}</span></a>` : '';
@@ -50,79 +45,49 @@ export function foodCard(food, ctx) {
 
 // The pet this page works with: the saved profile, or a logged-out visitor's quick details (this tab only).
 const curPet = () => getPet() || getQuickPet();
-export const makeCtx = () => {
-  const pet = curPet(); if (!pet) return { pet: null, plan: null, targets: null };
-  return { pet, plan: energyPlan(pet), targets: nutrientTargets(pet) };
-};
+// What calc worked out for the page, loaded when it renders and refreshed when the goal changes:
+let gview = null; // the pet's growth view (the goal chart reads it)
+let gv = null;    // the goal view: plan, targets, the goal's plan and calories, and the numbers around it
+let tv = null;    // the "your own numbers" view for the species shown: bounds and suggested numbers
+let goal = null;  // {type, targetKg, days, kcalOverride?} for the current pet
+export const makeCtx = () => ({ pet: curPet(), plan: gv?.plan || null, targets: gv?.targets || null, goalKcal: gv && goal ? gv.kcal : null });
+async function loadGoal() { const pet = curPet(); gv = pet ? await calc('goalView', pet, goal) : null; }
+async function loadTargets(species) { tv = await calc('targetsView', species); }
 
 // ---- state ------------------------------------------------------------------------------------
 const state = { kind: 'food', xq: '', xsort: 'budget', xtype: 'all', xhide: true, xshown: 48, species: null, stage: null, include: true, sort: 'fit', quick: new Set(), priority: new Set(), unit: 'kcal', targets: { label: {}, kcal: {} }, targetsOpen: false, moreOpen: false, preset: null, chartOpen: false, needs: new Set(), hideAllergy: true };
-let goal = null; // {type, targetKg, days, kcalOverride?} for the current pet
 let goalOpen = true; // open while choosing; collapses to one line so the foods are visible
-const kcalFor = (pet) => (goal?.kcalOverride != null ? Math.max(goal.kcalOverride, goal.type === 'lose' ? Math.round(weightLossKcal(pet, goal.targetKg)) : 0) : goalPlan(pet, goal).kcal); // an old override can never go below the safe level
-const withKcal = (c) => { if (c.pet && goal) c.goalKcal = kcalFor(c.pet); return c; };
+const kcalFor = () => gv.kcal; // calc keeps an old override from going below the safe level
+const withKcal = (c) => c;
 
-// ---- quick narrowing and priorities ----------------------------------------------------------
-const QUICK = [
-  { id: 'dry', label: 'Dry food', test: (f) => f.format === 'dry' },
-  { id: 'wet', label: 'Wet food', test: (f) => f.format === 'wet' },
-  { id: 'kcal', label: 'Calories on label', test: (f) => f.kcalPerKg != null },
-  { id: 'budget', label: 'Under $2 a day', test: (f, ctx) => { const c = costPerDay(f, ctx.goalKcal || ctx.plan?.kcal || 1000); return c != null && c <= 2; } },
-];
+// ---- quick narrowing and priorities (the labels; calc does the filtering and scoring) -------------
+const QUICK = [{ id: 'dry', label: 'Dry food' }, { id: 'wet', label: 'Wet food' }, { id: 'kcal', label: 'Calories on label' }, { id: 'budget', label: 'Under $2 a day' }];
 // Extras the owner can ask for. These are filters ("must contain"), matched on ingredients or the declared extras.
 const NEEDS = [
-  { id: 'joints', label: 'Joints (glucosamine, chondroitin)', test: (f) => (f.extras || []).some((x) => ['glucosamine', 'chondroitin', 'mussel'].includes(x)), help: 'Often chosen for older, large or heavier pets.' },
-  { id: 'collagen', label: 'Collagen', test: (f) => (f.extras || []).includes('collagen') || f.ingredients.some((i) => /collagen|bone broth/i.test(i)), help: 'Skin, coat and joint support. Evidence is limited.' },
-  { id: 'omega3', label: 'Omega-3 (skin and coat)', test: (f) => (f.extras || []).includes('omega3') || f.ingredients.some((i) => /fish oil|salmon|tuna|flax|krill/i.test(i)), help: 'From fish oil, oily fish or flaxseed.' },
-  { id: 'probiotics', label: 'Probiotics (gut)', test: (f) => (f.extras || []).includes('probiotics'), help: 'Live cultures added for digestion.' },
-  { id: 'antioxidants', label: 'Antioxidants (vitamins E, C)', test: (f) => (f.extras || []).includes('antioxidants'), help: 'Added vitamins and plant antioxidants.' },
+  { id: 'joints', label: 'Joints (glucosamine, chondroitin)', help: 'Often chosen for older, large or heavier pets.' },
+  { id: 'collagen', label: 'Collagen', help: 'Skin, coat and joint support. Evidence is limited.' },
+  { id: 'omega3', label: 'Omega-3 (skin and coat)', help: 'From fish oil, oily fish or flaxseed.' },
+  { id: 'probiotics', label: 'Probiotics (gut)', help: 'Live cultures added for digestion.' },
+  { id: 'antioxidants', label: 'Antioxidants (vitamins E, C)', help: 'Added vitamins and plant antioxidants.' },
 ];
-const suggestedNeeds = (pet) => { if (!pet) return []; const ids = []; const yrs = ageInMonths(pet.birth) / 12; if (yrs >= 7 || pet.bcs >= 6 || ['IV', 'V'].includes(pet.sizeCat)) ids.push('joints'); ids.push('omega3'); return ids; };
+const suggestedNeeds = () => gv?.needs || [];
 // Priorities rank foods instead of hiding them. Picking at most two forces a trade-off, so "everything highest" is impossible.
 const MAX_PRIORITIES = 2;
 const PRIORITIES = [
-  { id: 'cost', label: 'Lower cost', lowerBetter: true, get: (f, c) => costPerDay(f, c.goalKcal || c.plan?.kcal || 1000), why: (f, c) => `Lower cost: about $${costPerDay(f, c.goalKcal || c.plan?.kcal || 1000).toFixed(2)} a day` },
-  { id: 'protein', label: 'High protein', get: (f) => per1000(f.protein, f.kcalPerKg), why: (f) => `High protein: ${per1000(f.protein, f.kcalPerKg).toFixed(0)} g per 1000 kcal` },
-  { id: 'lean', label: 'Lean (less fat)', lowerBetter: true, get: (f) => per1000(f.fat, f.kcalPerKg), why: (f) => `Lean: ${per1000(f.fat, f.kcalPerKg).toFixed(0)} g fat per 1000 kcal` },
-  { id: 'fibre', label: 'Fibre-rich', get: (f) => per1000(f.fibre, f.kcalPerKg), why: () => 'Fibre helps them feel full' },
-  { id: 'lighter', label: 'Lighter food', lowerBetter: true, get: (f) => f.kcalPerKg, why: () => 'Fewer calories per gram, so bigger portions' },
-  { id: 'small', label: 'Small portions', get: (f) => f.kcalPerKg, why: () => 'Energy-dense, so smaller portions' },
+  { id: 'cost', label: 'Lower cost' }, { id: 'protein', label: 'High protein' }, { id: 'lean', label: 'Lean (less fat)' },
+  { id: 'fibre', label: 'Fibre-rich' }, { id: 'lighter', label: 'Lighter food' }, { id: 'small', label: 'Small portions' },
 ];
-function priorityScores(foods, ctx) {
-  const out = new Map(foods.map((f) => [f.id, { score: 0, reasons: [] }]));
-  [...state.priority].forEach((id) => {
-    const P = PRIORITIES.find((p) => p.id === id); const vals = foods.map((f) => P.get(f, ctx)).filter((v) => v != null);
-    if (!vals.length) return; const min = Math.min(...vals); const max = Math.max(...vals);
-    foods.forEach((f) => {
-      const v = P.get(f, ctx); if (v == null) return;
-      const n = max === min ? 0.5 : (v - min) / (max - min); const s = P.lowerBetter ? 1 - n : n;
-      const o = out.get(f.id); o.score += s; if (s >= 0.6) o.reasons.push(P.why(f, ctx));
-    });
-  });
-  return out;
-}
 
 // ---- your own numbers: bounded sliders, closest foods first ----------------------------------
-// Two ways to read a number: "% on the label" (as printed on the bag) or "per 1000 kcal" (fair comparison).
+// Two ways to read a number: "% on the label" (as printed on the bag) or "per 1000 kcal" (fair comparison). calc owns the bounds and suggestions.
 const TG = [
-  { key: 'protein', label: 'Protein', aafco: 'Crude Protein', label$: (f) => f.protein, kcal$: (f) => per1000(f.protein, f.kcalPerKg), unit: { label: '%', kcal: 'g per 1000 kcal' }, step: { label: 0.5, kcal: 1 }, dec: { label: 1, kcal: 0 } },
-  { key: 'fat', label: 'Fat', aafco: 'Crude Fat', label$: (f) => f.fat, kcal$: (f) => per1000(f.fat, f.kcalPerKg), unit: { label: '%', kcal: 'g per 1000 kcal' }, step: { label: 0.5, kcal: 1 }, dec: { label: 1, kcal: 0 } },
-  { key: 'fibre', label: 'Fibre', label$: (f) => f.fibre, kcal$: (f) => per1000(f.fibre, f.kcalPerKg), unit: { label: '%', kcal: 'g per 1000 kcal' }, step: { label: 0.5, kcal: 1 }, dec: { label: 1, kcal: 0 } },
-  { key: 'moisture', label: 'Moisture (water)', label$: (f) => f.moisture, kcal$: null, unit: { label: '%' }, step: { label: 1 }, dec: { label: 0 } },
-  { key: 'calcium', label: 'Calcium', aafco: 'Calcium', label$: (f) => f.calcium, kcal$: (f) => per1000(f.calcium, f.kcalPerKg), unit: { label: '%', kcal: 'g per 1000 kcal' }, step: { label: 0.05, kcal: 0.1 }, dec: { label: 2, kcal: 1 } },
-  { key: 'phosphorus', label: 'Phosphorus', aafco: 'Phosphorus', label$: (f) => f.phosphorus, kcal$: (f) => per1000(f.phosphorus, f.kcalPerKg), unit: { label: '%', kcal: 'g per 1000 kcal' }, step: { label: 0.05, kcal: 0.1 }, dec: { label: 2, kcal: 1 } },
-  { key: 'energy', label: 'Calories in the food', label$: (f) => (f.kcalPerKg ? f.kcalPerKg / 10 : null), kcal$: (f) => (f.kcalPerKg ? f.kcalPerKg / 10 : null), unit: { label: 'kcal per 100 g', kcal: 'kcal per 100 g' }, step: { label: 5, kcal: 5 }, dec: { label: 0, kcal: 0 } },
+  { key: 'protein', label: 'Protein', aafco: 'Crude Protein' }, { key: 'fat', label: 'Fat', aafco: 'Crude Fat' }, { key: 'fibre', label: 'Fibre' },
+  { key: 'moisture', label: 'Moisture (water)', labelOnly: true }, { key: 'calcium', label: 'Calcium', aafco: 'Calcium' }, { key: 'phosphorus', label: 'Phosphorus', aafco: 'Phosphorus' },
+  { key: 'energy', label: 'Calories in the food' },
 ];
-const tgGet = (T, mode) => (mode === 'kcal' ? T.kcal$ : T.label$);
 const snap = (v, step) => Math.round(v / step) * step;
-// Bounds come from what is actually on offer (a little wider), so a number can never be impossible.
-function bounds(T, mode, species) {
-  const g = tgGet(T, mode); if (!g) return null;
-  const vals = listFoods().filter((f) => f.species === species).map(g).filter((v) => v != null);
-  if (vals.length < 2) return null;
-  const step = T.step[mode]; const lo = Math.max(0, snap(Math.min(...vals) * 0.8, step)); let hi = snap(Math.max(...vals) * 1.2, step); if (hi <= lo) hi = lo + step * 5;
-  return { lo, hi, mid: snap(vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)], step), step, dec: T.dec[mode], unit: T.unit[mode] };
-}
+// Bounds come from what is actually on offer (calc reads the catalogue), so a number can never be impossible.
+const bounds = (T, mode) => tv?.bounds[mode][T.key] || null;
 const clamp = (v, b) => Math.min(b.hi, Math.max(b.lo, v));
 // Numbers are stored per 1,000 kcal (how foods are compared fairly) but shown as grams a day for this pet: scale by daily calories / 1,000.
 const factorFor = (T, c) => (T.key === 'energy' ? 1 : dayFactor(c)); // calories in a food stay kcal per 100 g
@@ -137,48 +102,19 @@ const activeTargets = () => Object.entries(state.targets[state.unit]).filter(([,
 const OPS = [['about', 'About'], ['min', 'At least'], ['max', 'At most']];
 const OP_WORD = { about: 'you want', min: 'at least', max: 'at most' };
 
-// Calories are limited to a sensible range: at least 60% of resting energy, at most 2.5x (3x while growing).
-// For a weight-loss goal the lowest allowed number is the safe level (AAHA starting amount for the target weight): we never go below it.
-function kcalBounds(pet, g = goal) { const safe = g?.type === 'lose' ? Math.round(weightLossKcal(pet, g.targetKg)) : 0; return { lo: Math.max(safe, Math.round(0.6 * rer(pet.weightKg))), safe, hi: Math.round((lifeStage(pet) === 'growth' ? 3 : 2.5) * rer(pet.weightKg)) }; }
-
-// ---- suggestion presets ----------------------------------------------------------------------
-// Numbers are in "per 1000 kcal" (and kcal per 100 g for the food's calories). Where there is a published reference we use it;
-// where there is not, the preset says so and is based on how the foods on offer compare.
-const up = (v, step = 1) => Math.ceil(v / step) * step;
-const quant = (vals, q) => { const s = [...vals].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor((s.length - 1) * q))]; };
-const aaf = (species, stage) => nutrientTargets({ species, sizeCat: 'IV', weightKg: 10, birth: new Date(Date.now() - (stage === 'growth' ? 3 * 30.4 : 3 * 365) * 864e5).toISOString().slice(0, 10) });
-function catVals(key, species) { const T = TG.find((x) => x.key === key); return listFoods().filter((f) => f.species === species).map((f) => T.kcal$(f)).filter((v) => v != null); }
+// ---- suggestion presets (the explanations; calc works out the numbers) ---------------------------
 const PRESETS = [
-  { id: 'lose', label: 'Weight loss',
-    build: (s) => [{ key: 'energy', op: 'max', v: s === 'cat' ? 325 : 310 }, { key: 'protein', op: 'min', v: s === 'cat' ? 85 : 75 }, ...(s === 'cat' ? [] : [{ key: 'fat', op: 'max', v: 30 }])],
-    why: (s) => `Calories follow AAFCO's limit for "light" foods (${s === 'cat' ? '325' : '310'} kcal per 100 g, or ${s === 'cat' ? '3,250' : '3,100'} per kg, for dry food). ${s === 'cat' ? 'Higher protein helps cats keep muscle while losing fat (studies used 35 to 45% of calories from protein), so we ask for at least 85 g per 1000 kcal.' : 'Protein and fat follow a research review of weight-loss dog diets: more than about 25% protein and under 10% fat on a dry-matter basis, roughly 75 and 30 g per 1000 kcal.'} There is no official standard for protein and fat in weight-loss foods.` },
-  { id: 'maintain', label: 'Keep steady',
-    build: (s) => { const a = aaf(s, 'adult'); return [{ key: 'protein', op: 'min', v: up(a['Crude Protein'].min * 1.2) }, { key: 'fat', op: 'min', v: up(a['Crude Fat'].min) }]; },
-    why: () => 'Protein about 20% above the AAFCO adult minimum and fat at least the minimum, so there is room to spare.' },
-  { id: 'gain', label: 'Weight gain',
-    build: (s) => { const a = aaf(s, 'adult'); return [{ key: 'energy', op: 'min', v: quant(catVals('energy', s), 0.75) }, { key: 'fat', op: 'min', v: quant(catVals('fat', s), 0.5) }, { key: 'protein', op: 'min', v: up(a['Crude Protein'].min * 1.2) }]; },
-    why: () => 'No official standard. We ask for richer than most foods on offer: calories in the top quarter, fat above the middle, and comfortable protein.' },
-  { id: 'grow', label: 'Growing',
-    build: (s) => { const a = aaf(s, 'growth'); return [{ key: 'protein', op: 'min', v: up(a['Crude Protein'].min) }, { key: 'fat', op: 'min', v: up(a['Crude Fat'].min) }]; },
-    why: () => 'At least the AAFCO minimums for growth. Calcium and phosphorus, which matter most for big breeds, are checked for you.' },
-  { id: 'active', label: 'Very active',
-    build: (s) => { const a = aaf(s, 'adult'); return [{ key: 'energy', op: 'min', v: quant(catVals('energy', s), 0.5) }, { key: 'fat', op: 'min', v: quant(catVals('fat', s), 0.5) }, { key: 'protein', op: 'min', v: up(a['Crude Protein'].min * 1.3) }]; },
-    why: () => 'No official standard. Energy-dense food with more fat and solid protein, for pets that burn more calories.' },
-  { id: 'senior', label: 'Senior or less active',
-    build: (s) => { const a = aaf(s, 'adult'); return [{ key: 'energy', op: 'max', v: quant(catVals('energy', s), 0.5) }, { key: 'fat', op: 'max', v: quant(catVals('fat', s), 0.5) }, { key: 'protein', op: 'min', v: up(a['Crude Protein'].min * 1.2) }]; },
-    why: () => 'No official standard. Leaner, lower-calorie food with comfortable protein, for pets that move less.' },
+  { id: 'lose', label: 'Weight loss', why: (s) => `Calories follow AAFCO's limit for "light" foods (${s === 'cat' ? '325' : '310'} kcal per 100 g, or ${s === 'cat' ? '3,250' : '3,100'} per kg, for dry food). ${s === 'cat' ? 'Higher protein helps cats keep muscle while losing fat (studies used 35 to 45% of calories from protein), so we ask for at least 85 g per 1000 kcal.' : 'Protein and fat follow a research review of weight-loss dog diets: more than about 25% protein and under 10% fat on a dry-matter basis, roughly 75 and 30 g per 1000 kcal.'} There is no official standard for protein and fat in weight-loss foods.` },
+  { id: 'maintain', label: 'Keep steady', why: () => 'Protein about 20% above the AAFCO adult minimum and fat at least the minimum, so there is room to spare.' },
+  { id: 'gain', label: 'Weight gain', why: () => 'No official standard. We ask for richer than most foods on offer: calories in the top quarter, fat above the middle, and comfortable protein.' },
+  { id: 'grow', label: 'Growing', why: () => 'At least the AAFCO minimums for growth. Calcium and phosphorus, which matter most for big breeds, are checked for you.' },
+  { id: 'active', label: 'Very active', why: () => 'No official standard. Energy-dense food with more fat and solid protein, for pets that burn more calories.' },
+  { id: 'senior', label: 'Senior or less active', why: () => 'No official standard. Leaner, lower-calorie food with comfortable protein, for pets that move less.' },
 ];
-function recommendedPreset(pet) {
-  if (!pet || !goal) return null;
-  if (goal.type === 'lose') return 'lose'; if (goal.type === 'gain') return 'gain'; if (goal.type === 'grow') return 'grow';
-  if (pet.activity === 'high') return 'active'; if (pet.activity === 'low') return 'senior'; return 'maintain';
-}
-function applyPreset(id, species) {
-  const P = PRESETS.find((x) => x.id === id); state.unit = 'kcal'; state.targets.kcal = {}; state.preset = id; state.targetsOpen = true;
-  P.build(species).forEach((it) => {
-    const T = TG.find((x) => x.key === it.key); const b = bounds(T, 'kcal', species); if (!b) return;
-    state.targets.kcal[it.key] = { v: clamp(snap(it.v, b.step), b), op: it.op };
-  });
+const recommendedPreset = () => gv?.preset || null;
+function applyPreset(id) {
+  state.unit = 'kcal'; state.targets.kcal = {}; state.preset = id; state.targetsOpen = true;
+  (tv.presets[id] || []).forEach((it) => { state.targets.kcal[it.key] = { v: it.v, op: it.op }; });
 }
 
 // The recommended intake (AAFCO, per 1000 kcal, for this pet's life stage) shown next to each number, in the unit being read.
@@ -200,73 +136,41 @@ function recLine(T, ctx, mode, b) {
 }
 
 function targetsHtml(ctx, species) {
-  const mode = state.unit; const pet = ctx.pet; const rec = recommendedPreset(pet);
+  const mode = 'kcal'; state.unit = 'kcal'; const pet = ctx.pet; const rec = recommendedPreset(); // always grams a day (per 1,000 kcal when there are no daily calories yet) const rec = recommendedPreset();
   const preset = PRESETS.find((p) => p.id === state.preset);
   const presets = `<div class="presets"><span class="legend" id="pre-l">Start from a suggestion</span>
     <div class="chips" role="group" aria-labelledby="pre-l">${PRESETS.map((p) => `<button type="button" class="chipbtn chipbtn--toggle" data-preset="${p.id}" aria-pressed="${state.preset === p.id}">${p.label}${rec === p.id ? ' (suggested)' : ''}</button>`).join('')}</div>
     ${preset ? `<div class="notice" role="note">${icon('info')}<div><strong>${preset.label}.</strong> ${esc(preset.why(species))} You can change any number below.</div></div>` : '<span class="hint">One tap fills sensible numbers. Then change any of them.</span>'}</div>`;
-  const calories = pet && !energyPlan(pet).hideKcal ? (() => {
-    const kb = kcalBounds(pet, goal); const sug = goalPlan(pet, goal).kcal; const cur = goal.kcalOverride ?? sug;
+  const calories = pet && gv && !gv.plan.hideKcal ? (() => {
+    const kb = gv.kcalBounds; const sug = Math.round(gv.suggestedKcal); const cur = goal.kcalOverride ?? sug;
     return `<div class="trow trow--cal"><div class="trow__head"><strong>Daily energy (kcal)</strong><span class="hint">We suggest ${sug} for ${esc(pet.name)}.${goal.kcalOverride != null ? ' You changed it.' : ''}</span></div>
       <div class="trow__ctl"><input type="range" aria-label="Daily kcal slider" min="${kb.lo}" max="${kb.hi}" step="10" value="${cur}" data-kcal-range><input class="input num" id="kcal-in" type="number" inputmode="numeric" aria-label="Daily kcal" min="${kb.lo}" max="${kb.hi}" step="10" value="${cur}" data-kcal-num><span class="unit">kcal a day</span></div>
       <div class="hint" id="kcal-msg" aria-live="polite">${goal.kcalOverride != null ? `<button type="button" class="btn btn--ghost btn--small" data-kcal-reset>Use our suggestion (${sug})</button>` : `${kb.safe ? `We will not go below the safe level of ${kb.safe} kcal a day for this goal. ` : ''}Allowed range ${kb.lo} to ${kb.hi}.`}</div></div>`;
   })() : '';
-  const rows = TG.filter((T) => tgGet(T, mode)).map((T) => {
-    const b = bounds(T, mode, species); if (!b) return '';
+  const rows = TG.filter((T) => !(mode === 'kcal' && T.labelOnly)).map((T) => {
+    const b = bounds(T, mode); if (!b) return '';
     const sb = shownBounds(b, mode, factorFor(T, ctx));
     const o = state.targets[mode][T.key]; const on = !!o; const val = Math.round((on ? o.v : b.mid) * sb.F * 10) / 10; const op = on ? o.op : 'about';
     const need = '';
-    return `<div class="trow ${on ? '' : 'is-off'}" data-tkey="${T.key}"><div class="trow__head"><label class="switch"><input type="checkbox" class="tuse" ${on ? 'checked' : ''}><span class="switch__ui" aria-hidden="true"></span><strong>${T.label}</strong></label><span class="hint">${NUTRIENT_HELP[T.key === 'energy' ? 'kcal' : T.key] || ''} ${need}</span></div>
-      <div class="trow__ctl"><input type="range" aria-label="${T.label} slider" min="${sb.lo}" max="${sb.hi}" step="${sb.step}" value="${val}" ${on ? '' : 'disabled'} data-trange><input class="input num" type="number" inputmode="decimal" aria-label="${T.label} target" min="${sb.lo}" max="${sb.hi}" step="${sb.step}" value="${val}" ${on ? '' : 'disabled'} data-tnum><span class="unit">${sb.unit}</span></div>
-      <div class="seg seg--3" role="radiogroup" aria-label="${T.label} rule">${OPS.map(([v, l]) => `<label><input type="radio" name="op-${T.key}" value="${v}" ${op === v ? 'checked' : ''} ${on ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div>
+    const fmtv = (x) => (+x).toFixed(sb.dec);
+    return `<div class="trow ${on ? '' : 'is-off'}" data-tkey="${T.key}"><div class="trow__head"><div class="row row--between"><strong>${T.label}</strong><span class="trow__val"><span data-tval>${on ? `${fmtv(val)} ${sb.unit}` : 'Not set'}</span><button type="button" class="btn btn--ghost btn--small" data-tclear aria-label="Clear ${T.label}" ${on ? '' : 'hidden'}>${icon('x')}</button></span></div><span class="hint">${NUTRIENT_HELP[T.key === 'energy' ? 'kcal' : T.key] || ''}</span></div>
+      <div class="trow__ctl"><input type="range" aria-label="${T.label}, ${sb.unit}" min="${sb.lo}" max="${sb.hi}" step="${sb.step}" value="${val}" data-trange></div>
+      <div class="seg seg--3" role="radiogroup" aria-label="${T.label} rule" ${on ? '' : 'hidden'}>${OPS.map(([v, l]) => `<label><input type="radio" name="op-${T.key}" value="${v}" ${op === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
       ${recLine(T, ctx, mode, b)}
-      <div class="hint" data-thint>${on ? `Allowed range ${sb.lo} to ${sb.hi}. ${OP_WORD[op][0].toUpperCase() + OP_WORD[op].slice(1)} ${(+val).toFixed(sb.dec)} ${sb.unit}: closest foods come first.` : 'Off. Switch on to aim for a number.'}</div></div>`;
+      <div class="hint" data-thint ${on ? '' : 'hidden'}>${on ? `${OP_WORD[op][0].toUpperCase() + OP_WORD[op].slice(1)} ${fmtv(val)} ${sb.unit}: closest foods come first.` : ''}</div></div>`;
   }).join('');
   return `<div class="stack"><p class="hint" style="margin:0">For owners following a vet's numbers or a diet plan. Foods closest to your numbers come first. Every number is limited to a sensible range. Foods that fit your pet come first; a food that does not fit is still listed, lower down, with a label saying why.</p>
     ${presets}
-    <div class="field"><span class="legend" id="unit-l">Show nutrients as</span><div class="seg seg--2" role="radiogroup" aria-labelledby="unit-l">${[['kcal', dayFactor(ctx) !== 1 ? 'Grams a day' : 'Per 1000 kcal'], ['label', '% on the label']].map(([v, l]) => `<label><input type="radio" name="tunit" value="${v}" ${mode === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
-      <span class="hint">${mode === 'label' ? 'The percentages printed on the bag (as fed).' : (dayFactor(ctx) !== 1 ? 'How many grams of each nutrient they get in a day, at their calories. Fair for wet and dry foods alike.' : 'A fair way to compare wet and dry foods on the same calories.')}</span></div>
     ${calories}${rows}<button class="btn btn--ghost" type="button" id="tclear">Clear my numbers</button></div>`;
 }
 
-function targetScores(foods, species) {
-  const act = activeTargets(); const out = new Map(foods.map((f) => [f.id, { score: 1, items: [] }]));
-  if (!act.length) return out;
-  foods.forEach((f) => { out.get(f.id).score = 0; });
-  act.forEach(([key, o]) => {
-    const T = TG.find((x) => x.key === key); const b = bounds(T, state.unit, species); if (!b) return; const g = tgGet(T, state.unit); const span = (b.hi - b.lo) / 2 || 1; const tv = o.v;
-    foods.forEach((f) => {
-      const v = g(f); const r = out.get(f.id);
-      if (v == null) { r.items.push({ state: 'na', text: `${T.label}: not reported (${OP_WORD[o.op]} ${(+tv).toFixed(b.dec)})` }); return; }
-      const miss = o.op === 'min' ? Math.max(0, tv - v) : o.op === 'max' ? Math.max(0, v - tv) : Math.abs(v - tv);
-      r.score += 1 - Math.min(1, miss / span);
-      const ok = o.op === 'about' ? miss <= span * 0.1 : miss === 0;
-      r.items.push({ state: ok ? 'on' : 'off', text: `${T.label}: ${v.toFixed(b.dec)} ${b.unit === '%' ? '%' : b.unit} (${OP_WORD[o.op]} ${(+tv).toFixed(b.dec)})` });
-    });
-  });
-  out.forEach((r) => { r.score /= act.length; });
-  return out;
-}
-
 // ---- goal card -------------------------------------------------------------------------------
-function defaultGoal(pet, plan) {
-  if (lifeStage(pet) === 'growth') return { type: 'grow', targetKg: pet.weightKg, days: 60 };
-  if (pet.species === 'dog' && pet.bcs >= 6) return { type: 'lose', targetKg: round(plan.ideal, 1), days: 90 };
-  return { type: 'maintain', targetKg: pet.weightKg, days: 90 };
-}
-function targetFor(type, pet, plan) {
-  if (type === 'lose') return round(pet.bcs >= 6 ? plan.ideal : pet.weightKg * 0.9, 1);
-  if (type === 'gain') return round(pet.weightKg * 1.1, 1);
-  return pet.weightKg;
-}
-
 function summary(ctx) {
-  const gp = goalPlan(ctx.pet, goal); const kc = kcalFor(ctx.pet);
+  const gp = gv.gp; const kc = gv.kcal;
   const when = gp.days % 30 === 0 ? `${gp.days / 30} month${gp.days === 30 ? '' : 's'}` : `${gp.days} days`;
   const tgt = goal.type === 'grow' ? `expected in ${when}` : goal.type === 'maintain' ? 'about where they are now' : `goal in ${when}`;
-  const bb = ctx.pet.species === 'dog' && ctx.pet.breed ? DOG_BREEDS.find((x) => x.name === ctx.pet.breed) : null;
-  const odd = bb && lifeStage(ctx.pet) === 'adult' && (goal.type === 'lose' || goal.type === 'gain') && (goal.targetKg < bb.min * 0.9 || goal.targetKg > bb.max * 1.1);
-  const breedNote = odd ? `${round(goal.targetKg, 1)} kg is outside the usual range for a ${ctx.pet.breed} (${round(bb.min, 1)} to ${round(bb.max, 1)} kg). Please check with your vet.` : '';
+  const bn = gv.breedNote;
+  const breedNote = bn ? `${round(goal.targetKg, 1)} kg is outside the usual range for a ${bn.breed} (${round(bn.min, 1)} to ${round(bn.max, 1)} kg). Please check with your vet.` : '';
   const warn = gp.pace.state !== 'good' ? `<div class="goalsum__pace">${badge(gp.pace.text, gp.pace.state, gp.pace.state === 'caution' ? 'alert' : 'x')}</div>` : '';
   return `<div class="goalsum__stats"><div class="stat"><div class="stat__value">${kc.toLocaleString('en-US')}</div><div class="stat__label">kcal a day${goal.kcalOverride != null ? ' (your number)' : ''}</div></div><div class="stat"><div class="stat__value">${round(gp.targetKg, 1)} kg</div><div class="stat__label">${tgt}</div></div></div>
     ${gp.vetWarning ? verdictBanner('caution', 'Check with your vet first', esc(gp.vetWarning)) : ''}${warn}${gp.note ? `<p class="hint" style="margin:var(--space-2) 0 0">${esc(gp.note)}</p>` : ''}<p class="hint" style="margin:var(--space-2) 0 0">${KCAL_NOTE} (kcal are the "Calories" on food labels.)</p>${breedNote ? `<p class="hint" style="margin:var(--space-2) 0 0">${esc(breedNote)}</p>` : ''}`;
@@ -274,19 +178,19 @@ function summary(ctx) {
 
 // The same chart and controls as the Growth tab, tucked in a collapsible section of the goal card.
 function chartSection(pet) {
-  if (!pet) return '';
-  const growth = chartKind(pet) === 'growth';
+  if (!pet || !gview) return '';
+  const growth = gview.kind === 'growth';
   return `<details class="disclosure" id="gchart-d" style="margin-top:var(--space-4)" ${state.chartOpen || goalOpen ? 'open' : ''}><summary>${growth ? 'See it on the growth chart' : 'See it on the weight chart'}</summary>
-    <div style="padding:var(--space-3) 0">${targetPickerHtml(pet, { intro: 'Tap the chart, or pick a date and weight below. The goal updates as you go.' })}</div></details>`;
+    <div style="padding:var(--space-3) 0">${targetPickerHtml(pet, gview, { intro: 'Tap the chart, or pick a date and weight below. The goal updates as you go.' })}</div></details>`;
 }
 // Where the picker starts: the goal's own target when it has one.
-const pickerFrom = (pet) => (goal && (goal.type === 'lose' || goal.type === 'gain' || (goal.type === 'grow' && goal.custom)) ? { days: goalPlan(pet, goal).days, kg: goalPlan(pet, goal).targetKg } : undefined);
+const pickerFrom = () => (goal && (goal.type === 'lose' || goal.type === 'gain' || (goal.type === 'grow' && goal.custom)) ? { days: gv.gp.days, kg: gv.gp.targetKg } : undefined);
 function goalLine(pet) {
-  const gp = goalPlan(pet, goal); const g = GOALS.find((x) => x.id === goal.type); const kc = kcalFor(pet);
-  const saved = getPet()?.goal ? effectiveGoal(getPet()) : null;
+  const gp = gv.gp; const g = GOALS.find((x) => x.id === goal.type); const kc = gv.kcal;
+  const saved = getPet()?.goal ? gv.saved : null;
   const date = saved?.targetDate || addDaysStr(todayStr(), gp.days); const left = saved ? saved.daysLeft : gp.days; const dateTxt = `by ${fmtDay(date)} (${left} days left)`;
   const short = goal.type === 'maintain' ? `Keep weight steady ${dateTxt}, ${kc} kcal a day` : goal.type === 'grow' && !goal.custom ? `Expected ${round(gp.targetKg, 1)} kg ${dateTxt}, ${kc} kcal a day` : `${round(saved ? saved.startKg : pet.weightKg, 1)} to ${round(gp.targetKg, 1)} kg ${dateTxt}, ${kc} kcal a day`;
-  const pr = saved ? goalProgress(getPet(), saved) : null;
+  const pr = saved ? gv.progress : null;
   const prBadge = pr ? (saved.expired ? badge('Goal date reached', 'caution') : badge(pr.text, { on_track: 'good', ahead: 'good', behind: 'caution', no_data: '' }[pr.state])) : '';
   return `<div class="goalline__title"><strong>Goal: ${g.label.toLowerCase()}</strong>${prBadge}${gp.pace.state && gp.pace.state !== 'good' ? badge(gp.pace.text, gp.pace.state) : ''}</div><div class="muted small">${short}</div>${gp.vetWarning ? `<div style="margin-top:var(--space-3)">${verdictBanner('caution', 'Check with your vet first', esc(gp.vetWarning))}</div>` : ''}`;
 }
@@ -313,7 +217,7 @@ function goalBox(ctx) {
   if (!ctx.pet) return isSignedIn() ? card(`<div class="plancard"><div><h2 style="margin:0 0 var(--space-1)">Search by goal</h2><p class="muted" style="margin:0 0 var(--space-4)">Tell us your pet's weight and what you want to happen. We work out a safe pace, daily calories and the foods that suit.</p>${button({ label: 'Build a profile', href: '/new', iconName: 'arrow' })}</div></div>`) : quickPanel();
   const pet = ctx.pet;
   if (!goalOpen) {
-    return card(`<div class="goalbar"><div id="goalline">${goalLine(pet)}</div><div class="goalbar__actions">${getPet() ? `<button class="btn btn--secondary btn--small" type="button" data-quick-weight>${icon('plus')}<span>Weight</span></button>` : ''}${goalsFor(pet).length > 1 ? '<button class="btn btn--secondary btn--small" type="button" id="gedit"><span>Change</span></button>' : ''}</div></div>${chartSection(pet)}`, { cls: 'goalcard' });
+    return card(`<div class="goalbar"><div id="goalline">${goalLine(pet)}</div><div class="goalbar__actions">${getPet() ? `<button class="btn btn--secondary btn--small" type="button" data-quick-weight>${icon('plus')}<span>Weight</span></button>` : ''}${gv.options.length > 1 ? '<button class="btn btn--secondary btn--small" type="button" id="gedit"><span>Change</span></button>' : ''}</div></div>${chartSection(pet)}`, { cls: 'goalcard' });
   }
   return card(`<h2 id="goal-h" style="margin:0 0 var(--space-2);font-size:var(--text-lg)">Set a goal for ${esc(pet.name)}</h2>
     <p class="muted small" style="margin:0 0 var(--space-3)">Drag on the chart, or pick a date and weight under it. A lower weight than now is a weight-loss goal, a higher one is weight gain, and the same is keeping steady.</p>
@@ -324,47 +228,35 @@ function goalBox(ctx) {
 
 const PAGE = 12; let shown = PAGE; // results are shown a page at a time so a phone is not scrolling through the whole catalogue
 // ---- results ---------------------------------------------------------------------------------
-function results(ctx) {
+// calc filters, scores and sorts the catalogue; this draws the page of cards it returns.
+async function results(ctx) {
   const species = state.species || ctx.pet?.species || 'dog';
-  let foods = listFoods().filter((f) => f.species === species && (state.stage !== 'growth' || ['growth', 'all'].includes(f.lifeStage)));
-  const region = getRegion(); if (region !== 'all') foods = foods.filter((f) => (f.markets || []).includes(region)); // the profile's region: only foods sold there
-  foods = foods.filter((f) => [...state.quick].every((id) => QUICK.find((q) => q.id === id).test(f, ctx)));
-  if (ctx.pet && state.hideAllergy) foods = foods.filter((f) => !allergenHits(f, ctx.pet).length);
-  foods = foods.filter((f) => [...state.needs].every((id) => NEEDS.find((n) => n.id === id).test(f)));
-  if (!state.include) foods = foods.filter((f) => activeTargets().every(([key]) => { const T = TG.find((x) => x.key === key); return tgGet(T, state.unit)(f) != null; }));
-  const fit = (f) => (ctx.pet ? ORDER[foodFit(f, ctx.pet, ctx.plan, ctx.targets).verdict] : 0);
-  const match = new Map();
-  if (ctx.pet && goal) foods.forEach((f) => match.set(f.id, goalMatch(f, goal.type, ctx.goalKcal)));
-  const pri = priorityScores(foods, ctx); const tsc = targetScores(foods, species); const hasT = activeTargets().length > 0;
-  const gs = [...match.values()].map((m) => m.score); const gmin = Math.min(...gs, 0); const gmax = Math.max(...gs, 1);
-  const total = (f) => (pri.get(f.id)?.score ?? 0) + 0.5 * (match.has(f.id) ? (match.get(f.id).score - gmin) / ((gmax - gmin) || 1) : 0) + (hasT ? 2 * tsc.get(f.id).score : 0);
-  foods.sort((a, b) => {
-    if (state.sort === 'rating') return b.rating - a.rating;
-    if (state.sort === 'price') return (costPerDay(a, ctx.goalKcal || 1000) ?? 99) - (costPerDay(b, ctx.goalKcal || 1000) ?? 99);
-    return fit(a) - fit(b) || total(b) - total(a) || b.rating - a.rating;
-  });
-  foods.forEach((f) => { const m = match.get(f.id) || { score: 0, reasons: [] }; m.reasons = [...pri.get(f.id).reasons, ...m.reasons].slice(0, 3); m.targets = hasT ? tsc.get(f.id).items : []; match.set(f.id, m); });
-  if (state.sort === 'fit' && (goal || state.priority.size || hasT)) foods.filter((f) => fit(f) === 0).slice(0, 2).forEach((f) => { (match.get(f.id) || (match.set(f.id, { reasons: [], targets: [] }), match.get(f.id))).top = true; });
-  ctx.match = match;
+  const ratings = state.sort === 'rating' ? Object.fromEntries(listFoods().map((f) => [f.id, f.rating || 0])) : undefined; // owner ratings live in the app, not the catalogue
+  const r = await calc('rankFoods', { pet: ctx.pet, goal: ctx.pet ? goal : null, species, stage: state.stage, region: getRegion(), quick: [...state.quick], needs: [...state.needs], hideAllergy: state.hideAllergy, include: state.include, priority: [...state.priority], unit: state.unit, targets: state.targets[state.unit], sort: state.sort, ratings, limit: shown });
+  const byId = new Map(listFoods().map((f) => [f.id, f]));
+  const hasT = activeTargets().length > 0;
   const goalLabel = goal ? GOALS.find((g) => g.id === goal.type).label.toLowerCase() : '';
   const extra = [state.priority.size ? 'your priorities' : '', hasT ? 'your numbers' : ''].filter(Boolean).join(' and ');
-  return foods.length
-    ? `<h2 class="sr-only">Results</h2><p class="muted small" aria-live="polite">${foods.length} food${foods.length === 1 ? '' : 's'}${ctx.pet ? ` for ${esc(ctx.pet.name || 'your pet')}${goal ? `, ranked to ${goalLabel}${extra ? ` and ${extra}` : ''}` : ''}` : ''}</p><div class="grid grid--auto">${foods.slice(0, shown).map((f) => foodCard(f, ctx)).join('')}</div>${foods.length > shown ? `<button class="btn btn--secondary btn--block" type="button" data-more>Show ${Math.min(PAGE, foods.length - shown)} more (${shown} of ${foods.length})</button>` : ''}`
+  return r.total
+    ? `<h2 class="sr-only">Results</h2><p class="muted small" aria-live="polite">${r.total} food${r.total === 1 ? '' : 's'}${ctx.pet ? ` for ${esc(ctx.pet.name || 'your pet')}${goal ? `, ranked to ${goalLabel}${extra ? ` and ${extra}` : ''}` : ''}` : ''}</p><div class="grid grid--auto">${r.items.filter((c) => byId.has(c.id)).map((c) => foodCard(byId.get(c.id), c)).join('')}</div>${r.total > shown ? `<button class="btn btn--secondary btn--block" type="button" data-more>Show ${Math.min(PAGE, r.total - shown)} more (${shown} of ${r.total})</button>` : ''}`
     : emptyState({ img: (ctx.pet?.species === 'cat' || state.species === 'cat') ? 'cut-cat' : 'cut-beagle', title: 'No foods match, yet', text: 'Try removing a filter, or turn on "include foods that do not report a nutrient" in More filters.' });
 }
 
 function needsHtml(pet) {
   const sug = suggestedNeeds(pet);
   const al = pet?.allergies || [];
-  return `<section class="narrow" aria-labelledby="need-h" style="margin-top:var(--space-3)"><h2 id="need-h" class="item-title" style="margin:0 0 var(--space-1)">Special needs</h2>
-  <p class="muted small" style="margin:0 0 var(--space-2)">Only foods that include them.</p>
-  <div class="chips" role="group" aria-label="Extras">${NEEDS.map((n) => `<button type="button" class="chipbtn chipbtn--toggle" data-need="${n.id}" aria-pressed="${state.needs.has(n.id)}" title="${esc(n.help)}">${n.label}${sug.includes(n.id) ? ' <span class="badge badge--info">Suggested</span>' : ''}</button>`).join('')}</div></section>
-  ${pet ? `<section class="narrow" aria-labelledby="alg-h" style="margin-top:var(--space-3)"><h2 id="alg-h" class="item-title" style="margin:0 0 var(--space-1)">Anything they should avoid?</h2>
+  const nOn = state.needs.size; const aOn = pet && al.length && state.hideAllergy ? 1 : 0;
+  return `<details class="disclosure" id="needs-d" style="margin-top:var(--space-3)" ${nOn ? 'open' : ''}><summary>Special needs${nOn ? ` <span class="badge badge--info">${nOn} on</span>` : ''}</summary>
+  <div style="padding:var(--space-3) 0"><p class="muted small" style="margin:0 0 var(--space-2)">Only foods that include them.</p>
+  <div class="chips" role="group" aria-label="Extras">${NEEDS.map((n) => `<button type="button" class="chipbtn chipbtn--toggle" data-need="${n.id}" aria-pressed="${state.needs.has(n.id)}" title="${esc(n.help)}">${n.label}${sug.includes(n.id) ? ' <span class="badge badge--info">Suggested</span>' : ''}</button>`).join('')}</div></div></details>
+  ${pet ? `<details class="disclosure" id="alg-d" style="margin-top:var(--space-2)"><summary>Anything they should avoid?${aOn ? ` <span class="badge badge--info">${aOn} on</span>` : ''}</summary><div style="padding:var(--space-3) 0">
   ${al.length ? `<div class="chips">${al.map((a) => `<span class="badge badge--bad">${esc(a)}</span>`).join('')}</div>
   <label class="switch" style="margin-top:var(--space-3)"><input type="checkbox" id="hide-al" ${state.hideAllergy ? 'checked' : ''}><span class="switch__ui" aria-hidden="true"></span><span class="small">Hide foods that contain them (from ${esc(pet.name)}'s profile)</span></label>`
-    : `<p class="muted small" style="margin:0">None listed for ${esc(pet.name)}. <a href="/pet/profile">Add allergies in the profile</a> and we hide those foods.</p>`}</section>` : ''}`;
+    : `<p class="muted small" style="margin:0">None listed for ${esc(pet.name)}. <a href="/pet/profile">Add allergies in the profile</a> and we hide those foods.</p>`}</div></details>` : ''}`;
 }
 function syncMoreBadge() {
+  const sb = (id, n) => { const el = document.querySelector(`#${id} > summary`); if (!el) return; el.querySelector('.badge')?.remove(); if (n) el.append(' ', Object.assign(document.createElement('span'), { className: 'badge badge--info', textContent: `${n} on` })); };
+  sb('needs-d', state.needs.size); sb('alg-d', document.querySelector('#hide-al')?.checked ? 1 : 0);
   const s = document.querySelector('#more-opts > summary'); if (!s) return;
   s.querySelector('.badge')?.remove();
   const n = state.needs.size + (state.targetsOpen && activeTargets().length ? 1 : 0);
@@ -392,19 +284,18 @@ const typeLabel = (t) => TYPE_LABEL[t] || 'Treat';
 const KINDS = [['food', 'Foods'], ['treat', 'Treats'], ['supplement', 'Supplements']];
 const fmtn = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US');
 const energyOf = (t) => (t.kcalPerTreat ? `${fmtn(t.kcalPerTreat)} kcal per ${esc(t.kcalPerTreatUnit || 'treat')}` : t.kcalPerKg ? `${Math.round(t.kcalPerKg / 10)} kcal per 100 g` : 'Calories not stated');
-const treatDay = (t, pet, kcal) => {
-  if (!pet) return { text: 'Add your pet to see how many fit in a day', strong: false };
-  if (kcal == null) return { text: 'Ask your vet how many', strong: false };
-  const p = treatPlan(t, pet, kcal);
-  if (p.count != null) return { text: p.count >= 1 ? `Up to ${p.count} a day${p.limitedBy === 'label' ? ' (label limit)' : ''}` : 'One is more than 10% of the day', strong: true };
-  if (p.grams != null) return { text: `About ${Math.round(p.grams)} g a day`, strong: true };
+// How many of a treat fit in a day, worded from what calc worked out (v.day).
+const treatDay = (d) => {
+  if (d.kind === 'nopet') return { text: 'Add your pet to see how many fit in a day', strong: false };
+  if (d.kind === 'vet') return { text: 'Ask your vet how many', strong: false };
+  if (d.kind === 'count') return { text: d.count >= 1 ? `Up to ${d.count} a day${d.limitedBy === 'label' ? ' (label limit)' : ''}` : 'One is more than 10% of the day', strong: true };
+  if (d.kind === 'grams') return { text: `About ${Math.round(d.grams)} g a day`, strong: true };
   return { text: 'Energy not stated, so we cannot count it', strong: false };
 };
-const kcalOfPet = (pet) => { if (!pet) return null; const pl = energyPlan(pet); return pl.hideKcal ? null : Math.round(pl.kcal); };
 const addBtn = (id, kind) => (isSignedIn() ? button({ label: 'Add to diet', variant: 'primary btn--small', iconName: 'plus', attrs: `data-add="${id}" data-kind="${kind}"` }) : button({ label: 'Add to diet', variant: 'primary btn--small', iconName: 'plus', attrs: 'data-signup data-then="/foods"' }));
 
-function treatCard(t, pet, kcal) {
-  const fit = pet ? treatFit(t, pet) : null; const day = treatDay(t, pet, kcal);
+function treatCard(t, pet, v) {
+  const fit = v.fit; const day = treatDay(v.day);
   const buy = t.buyUrl ? `<a class="fc__buy" href="${esc(t.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${t.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(t.buyRetailer || 'a retailer')}</span></a>` : '';
   return `<div class="fcwrap">${card(`<div class="fc__img">${foodPic(t)}</div>
     <div class="row row--between">${fit ? verdictBadge(fit.verdict, { good: 'No ingredient problems', caution: 'Check details', bad: 'Not a match' }[fit.verdict]) : badge('Add your pet to check')}${badge(typeLabel(t.treatType), 'info')}</div>
@@ -417,15 +308,15 @@ function treatCard(t, pet, kcal) {
 const SUPP_TYPE = { joint: 'Joint', 'skin & coat': 'Skin and coat', multivitamin: 'Multivitamin', 'probiotic/digestive': 'Probiotic and digestive', calming: 'Calming', immune: 'Immune', dental: 'Dental', 'liver/kidney': 'Liver and kidney', 'fish oil/omega': 'Fish oil and omega', urinary: 'Urinary', hairball: 'Hairball', other: 'Other' };
 const suppType = (t) => SUPP_TYPE[t] || 'Supplement';
 const suppFor = (s) => (s.speciesAll && s.speciesAll.length ? `For ${s.speciesAll.map((x) => `${x}s`).join(' and ')}` : s.speciesUnknown ? 'Species not stated on the label' : `For ${s.species}s`);
-const doseLine = (s, pet) => {
-  if (!pet) return null; const d = supplementDose(s, pet.weightKg);
+const doseLine = (s, pet, d) => {
+  if (!pet) return null;
   if (d && d.amount != null && d.covered !== false) return `Label dose at ${fmtn(pet.weightKg)} kg: ${fmtn(d.amount)} ${d.unit}`.trim();
   if (d && d.covered === false) return `The label's weight table does not cover ${fmtn(pet.weightKg)} kg. Check the bag.`;
   return s.dosingText ? 'See the label for the dose' : 'Dose not on our data. Check the bag.';
 };
-function supplementCard(s, pet) {
+function supplementCard(s, pet, d) {
   const buy = s.buyUrl ? `<a class="fc__buy" href="${esc(s.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${s.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(s.buyRetailer || 'a retailer')}</span></a>` : '';
-  const dose = doseLine(s, pet);
+  const dose = doseLine(s, pet, d);
   return `<div class="fcwrap">${card(`${s.photo ? `<div class="fc__img">${foodPic(s)}</div>` : ''}
     <div class="row row--between">${badge(suppType(s.type), 'info')}${s.vetOnly ? badge('Vet only', 'caution') : ''}</div>
     <h3 class="card__title" style="margin-top:var(--space-3)">${esc(s.name)}</h3><p class="muted small" style="margin:0">${esc(s.brand)} · ${esc(suppFor(s))}</p>
@@ -435,8 +326,8 @@ function supplementCard(s, pet) {
     <div class="row" style="margin-top:var(--space-3)">${button({ label: 'Details', variant: 'secondary btn--small', attrs: `data-sdetail="${s.id}" type="button"` })}${addBtn(s.id, 'supplement')}</div>`)}${buy}</div>`;
 }
 
-function supplementSheet(s, ctx) {
-  const pet = ctx.pet; const dose = doseLine(s, pet);
+function supplementSheet(s, ctx, d) {
+  const pet = ctx.pet; const dose = doseLine(s, pet, d);
   const actives = s.actives.length ? `<ul class="small" style="margin:0;padding-left:1.2rem">${s.actives.map((a) => `<li>${esc(a.name || '')}${a.amount != null ? `: ${esc(String(a.amount))} ${esc(a.unit || '')}` : ''}</li>`).join('')}</ul>` : '<p class="small muted" style="margin:0">Amounts per serving are not in our data (many brands print them in images). Check the bag.</p>';
   const body = `<div class="stack"><p style="margin:0"><strong>${esc(suppType(s.type))}</strong>${s.form ? ` · ${esc(s.form)}` : ''} · ${esc(suppFor(s))}${s.servingSize ? ` · serving: ${esc(s.servingSize)}` : ''}</p>
     ${s.claim ? `<p class="small" style="margin:0"><span class="muted">The label says:</span> ${esc(s.claim)}</p>` : ''}
@@ -449,40 +340,37 @@ function supplementSheet(s, ctx) {
   openSheet({ title: `${s.brand} ${s.name}`, body, onMount: (el, close) => { el.querySelector('[data-add]')?.addEventListener('click', () => { if (isSignedIn() && getPet()) { close(); openAddItem(getPet(), 'supplement', s, () => {}); } }); } });
 }
 
-function extraResults(ctx) {
-  const pet = ctx.pet; const species = pet?.species || 'dog'; const q = state.xq.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const match = (x) => q.every((w) => `${x.brand} ${x.name}`.toLowerCase().includes(w));
+// Treats and supplements: calc filters, sorts and works out the day's amount or the label dose; this draws the cards.
+let extraTypes = [];
+async function extraResults(ctx) {
+  const pet = ctx.pet; const species = pet?.species || 'dog';
   if (state.kind === 'supplement') {
-    const all = listSupplements();
-    if (!all.length) return emptyState({ img: 'cut-beagle', title: 'Supplements are coming', text: 'We are adding supplements to this list. You can already add one by name on the Diet page.' });
-    const list = all.filter((s) => supplementFits(s, species) && (state.xtype === 'all' || s.type === state.xtype) && match(s));
-    return list.length ? `<h2 class="sr-only">Supplement results</h2><p class="muted small" aria-live="polite">${list.length} supplement${list.length === 1 ? '' : 's'}${pet ? ` for ${esc(pet.name)}` : ''}. We list what the label says and do not judge whether they work. Ask your vet first.</p><div class="grid grid--auto">${list.slice(0, state.xshown).map((s) => supplementCard(s, pet)).join('')}</div>${list.length > state.xshown ? `<div style="margin-top:var(--space-5);text-align:center">${button({ label: `Show more (${list.length - state.xshown} left)`, variant: 'secondary', attrs: 'id="xmore" type="button"' })}</div>` : ''}` : emptyState({ img: 'cut-beagle', title: 'No supplements match', text: 'Try another type or fewer words.' });
+    if (!listSupplements().length) return emptyState({ img: 'cut-beagle', title: 'Supplements are coming', text: 'We are adding supplements to this list. You can already add one by name on the Diet page.' });
+    const v = await calc('supplementsView', { pet, species, type: state.xtype, q: state.xq, limit: state.xshown });
+    extraTypes = v.types; const byId = new Map(listSupplements().map((x) => [x.id, x]));
+    return v.total ? `<h2 class="sr-only">Supplement results</h2><p class="muted small" aria-live="polite">${v.total} supplement${v.total === 1 ? '' : 's'}${pet ? ` for ${esc(pet.name)}` : ''}. We list what the label says and do not judge whether they work. Ask your vet first.</p><div class="grid grid--auto">${v.items.filter((i) => byId.has(i.id)).map((i) => supplementCard(byId.get(i.id), pet, i.dose)).join('')}</div>${v.total > state.xshown ? `<div style="margin-top:var(--space-5);text-align:center">${button({ label: `Show more (${v.total - state.xshown} left)`, variant: 'secondary', attrs: 'id="xmore" type="button"' })}</div>` : ''}` : emptyState({ img: 'cut-beagle', title: 'No supplements match', text: 'Try another type or fewer words.' });
   }
-  const kcal = kcalOfPet(pet);
-  let list = listTreats().filter((t) => t.species === species && (state.xtype === 'all' || t.treatType === state.xtype) && match(t));
-  if (pet && state.xhide) list = list.filter((t) => !allergenHits(t, pet).length);
-  const count = (t) => treatPlan(t, pet, kcal).count;
-  const by = { budget: (a, b) => (count(b) ?? -1) - (count(a) ?? -1), calories: (a, b) => (a.kcalPerTreat ?? 1e9) - (b.kcalPerTreat ?? 1e9), name: (a, b) => `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`) };
-  list.sort(by[state.xsort === 'budget' && !(pet && kcal) ? 'calories' : state.xsort] || by.name);
-  if (!list.length) return emptyState({ img: 'cut-beagle', title: 'No treats match', text: 'Try another type, or clear the search.' });
-  return `<h2 class="sr-only">Treat results</h2><p class="muted small" aria-live="polite">${list.length} treat${list.length === 1 ? '' : 's'}${pet ? ` for ${esc(pet.name)}` : ''}. Treats are best kept to about 10% of a day's calories, all together.</p>
-    <div class="grid grid--auto">${list.slice(0, state.xshown).map((t) => treatCard(t, pet, kcal)).join('')}</div>
-    ${list.length > state.xshown ? `<div style="margin-top:var(--space-5);text-align:center">${button({ label: `Show more (${list.length - state.xshown} left)`, variant: 'secondary', attrs: 'id="xmore" type="button"' })}</div>` : ''}`;
+  const v = await calc('treatsView', { pet, species, type: state.xtype, q: state.xq, hide: state.xhide, sort: state.xsort, limit: state.xshown });
+  extraTypes = v.types; const byId = new Map(listTreats().map((x) => [x.id, x]));
+  if (!v.total) return emptyState({ img: 'cut-beagle', title: 'No treats match', text: 'Try another type, or clear the search.' });
+  return `<h2 class="sr-only">Treat results</h2><p class="muted small" aria-live="polite">${v.total} treat${v.total === 1 ? '' : 's'}${pet ? ` for ${esc(pet.name)}` : ''}. Treats are best kept to about 10% of a day's calories, all together.</p>
+    <div class="grid grid--auto">${v.items.filter((i) => byId.has(i.id)).map((i) => treatCard(byId.get(i.id), pet, i)).join('')}</div>
+    ${v.total > state.xshown ? `<div style="margin-top:var(--space-5);text-align:center">${button({ label: `Show more (${v.total - state.xshown} left)`, variant: 'secondary', attrs: 'id="xmore" type="button"' })}</div>` : ''}`;
 }
 
-function extraHtml(ctx) {
-  const types = ['all', ...new Set((state.kind === 'supplement' ? listSupplements().map((s) => s.type) : listTreats().map((t) => t.treatType)).filter(Boolean))];
+async function extraHtml(ctx) {
+  const res = await extraResults(ctx); const types = ['all', ...extraTypes];
   return `<div class="stack">${ctx.pet ? '' : notice(state.kind === 'supplement' ? 'Add your pet to see only the supplements for their species and the label dose for their weight.' : 'Add your pet to check ingredients against allergies and to see how many treats fit in a day.', 'info')}
     <div class="grid grid--3"><div class="field"><label for="xq">Search</label><input class="input" id="xq" type="search" value="${esc(state.xq)}" placeholder="Brand or name" autocomplete="off"></div>
       <div class="field" id="xs-f" ${state.kind === 'treat' ? '' : 'hidden'}><label for="xs">Sort by</label><select class="select" id="xs">${[['budget', 'Most treats a day'], ['calories', 'Fewest calories per treat'], ['name', 'Name']].map(([v, l]) => `<option value="${v}" ${state.xsort === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       ${ctx.pet && state.kind === 'treat' ? `<label class="switch" style="align-self:end"><input type="checkbox" id="xh" ${state.xhide ? 'checked' : ''}><span class="switch__ui" aria-hidden="true"></span><span class="small">Hide treats with ${esc(ctx.pet.name)}'s allergens</span></label>` : ''}</div>
     <div class="row" id="xtypes" role="group" aria-label="Type">${types.map((v) => `<button type="button" class="chipbtn chipbtn--toggle" data-xtype="${esc(v)}" aria-pressed="${state.xtype === v}">${v === 'all' ? 'All' : state.kind === 'supplement' ? suppType(v) : typeLabel(v)}</button>`).join('')}</div>
-    <div id="xres">${extraResults(ctx)}</div></div>`;
+    <div id="xres">${res}</div></div>`;
 }
 
-function treatSheet(t, ctx) {
-  const pet = ctx.pet; const kcal = kcalOfPet(pet); const p = pet ? treatPlan(t, pet, kcal) : null; const fit = pet ? treatFit(t, pet) : null;
-  const flagged = (ing) => TOXIC_TERMS.some((x) => (!x.species || x.species === t.species) && ing.toLowerCase().includes(x.term)) || (!!pet && allergenHits({ ingredients: [ing] }, pet).length > 0);
+async function treatSheet(t, ctx) {
+  const pet = ctx.pet; const td = pet ? await calc('treatDetail', pet, t.id) : null; const kcal = td ? td.kcal : null; const p = td ? td.plan : null; const fit = td ? td.fit : null;
+  const flagged = (ing) => !!td && td.flagged[t.ingredients.indexOf(ing)];
   const lines = [];
   if (p && kcal != null) {
     lines.push(`Treats are best kept to about 10% of a day, <strong>${Math.round(p.budgetKcal)} kcal</strong> of ${esc(pet.name)}'s ${kcal.toLocaleString('en-US')}, for all treats together.`);
@@ -498,14 +386,21 @@ function treatSheet(t, ctx) {
   openSheet({ title: `${t.brand} ${t.name}`, body, onMount: (el, close) => { el.querySelector('[data-add]')?.addEventListener('click', () => { if (isSignedIn() && getPet()) { close(); openAddItem(getPet(), 'treat', t, () => {}); } }); } });
 }
 
-export function render() {
+export async function render() {
+  const pet0 = curPet();
+  gview = pet0 ? await calc('growthPageView', pet0) : null;
   if (location.search) { const q = new URLSearchParams(location.search); state.species = q.get('species') || state.species; state.stage = q.get('stage'); if (['food', 'treat', 'supplement'].includes(q.get('kind'))) state.kind = q.get('kind'); }
+  const species = state.species || pet0?.species || 'dog';
+  // the goal starts from the saved one (or a sensible default), and calc works out its plan and calories
+  goal = null; gv = null;
+  if (pet0) { gv = await calc('goalView', pet0, null); goal = { ...gv.start }; }
+  await loadTargets(species);
   const ctx = makeCtx();
-  if (ctx.pet) { goal = ctx.pet.goal && goalsFor(ctx.pet).some((g) => g.id === ctx.pet.goal.type) ? { ...effectiveGoal(ctx.pet) } : defaultGoal(ctx.pet, ctx.plan); ctx.goalKcal = kcalFor(ctx.pet); } else goal = null;
   goalOpen = !ctx.pet; // with a pet the goal starts as a slim bar; "Change goal" opens the form
   state.chartOpen = false; // the goal chart always starts collapsed; tapping its heading opens it
-  const species = state.species || ctx.pet?.species || 'dog';
   state.targetsOpen = state.targetsOpen || activeTargets().length > 0 || goal?.kcalOverride != null;
+  const resultsHtml = await results(ctx);
+  const extra = state.kind === 'food' ? '' : await extraHtml(ctx);
   return {
     title: 'Dog & Cat Food Compared by Fit and Cost per Day',
     html: `${pageHead('Find their food')}<div class="page">${expNote(' Food data can be wrong or out of date: check the label on the bag.')}
@@ -525,25 +420,25 @@ export function render() {
           <button class="btn btn--ghost" type="button" id="clr">Clear everything</button>
           <button class="btn btn--primary btn--block filters__done" type="button" id="fdone">Show foods</button>
         </form></aside>
-        <div id="res" class="stack">${results(ctx)}</div>
+        <div id="res" class="stack">${resultsHtml}</div>
       </div></div>
-      <div id="extraview" ${state.kind === 'food' ? 'hidden' : ''}>${extraHtml(ctx)}</div></div>`,
+      <div id="extraview" ${state.kind === 'food' ? 'hidden' : ''}>${extra}</div></div>`,
     mount(root, rerender) {
       bindFields(root, rerender);
       mountCombos(root);
       // Foods / Treats / Supplements: the food view is not re-rendered, it is only hidden
-      const extraOut = () => { const x = root.querySelector('#xres'); if (x) x.innerHTML = extraResults(makeCtx()); };
-      const setKind = (k) => {
+      const extraOut = async () => { const x = root.querySelector('#xres'); if (x) x.innerHTML = await extraResults(makeCtx()); };
+      const setKind = async (k) => {
         state.kind = k; state.xshown = 48; state.xtype = 'all'; root.querySelector('#foodview').hidden = k !== 'food'; root.querySelector('#extraview').hidden = k === 'food';
         root.querySelectorAll('[data-kind-tab]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kindTab === k)));
-        if (k !== 'food') root.querySelector('#extraview').innerHTML = extraHtml(makeCtx());
+        if (k !== 'food') root.querySelector('#extraview').innerHTML = await extraHtml(makeCtx());
       };
       rootOn(root, 'click', 'foods', (e) => {
         const fa = e.target.closest('[data-fadd]'); if (fa) { const fd = listFoods().find((x) => x.id === fa.dataset.fadd); if (fd && getPet()) openAddItem(getPet(), 'food', fd, () => {}); return; }
         const kt = e.target.closest('[data-kind-tab]'); if (kt) { setKind(kt.dataset.kindTab); return; }
         const xt = e.target.closest('[data-xtype]'); if (xt) { state.xtype = xt.dataset.xtype; state.xshown = 48; root.querySelectorAll('[data-xtype]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.xtype === state.xtype))); extraOut(); return; }
         if (e.target.closest('#xmore')) { state.xshown += 48; extraOut(); return; }
-        const sd = e.target.closest('[data-sdetail]'); if (sd) { const s = listSupplements().find((x) => x.id === sd.dataset.sdetail); if (s) supplementSheet(s, makeCtx()); return; }
+        const sd = e.target.closest('[data-sdetail]'); if (sd) { const sp = listSupplements().find((x) => x.id === sd.dataset.sdetail); if (sp) { const c = makeCtx(); calc('supplementDose', sp, c.pet?.weightKg || null).then((d) => supplementSheet(sp, c, d)); } return; }
         const td = e.target.closest('[data-tdetail]'); if (td) { const t = listTreats().find((x) => x.id === td.dataset.tdetail); if (t) treatSheet(t, makeCtx()); return; }
         const ad = e.target.closest('[data-add]'); if (ad && isSignedIn() && getPet()) { const kind = ad.dataset.kind; const item = (kind === 'supplement' ? listSupplements() : listTreats()).find((x) => x.id === ad.dataset.add); if (item) openAddItem(getPet(), kind, item, extraOut); }
       });
@@ -555,7 +450,7 @@ export function render() {
         bindBreedSize(root, { breedId: 'q-breed', sizeId: 'q-size', lookup: breedSize, labelOf: (id) => SIZE_CATEGORIES.find((s) => s.id === id)?.label || id });
         const dog = root.querySelector('#q-dog');
         qf.addEventListener('change', () => { dog.hidden = new FormData(qf).get('q-species') === 'cat'; });
-        qf.addEventListener('submit', (e) => {
+        qf.addEventListener('submit', async (e) => {
           e.preventDefault(); const d = new FormData(qf); const err = root.querySelector('#q-err');
           const species = d.get('q-species') || 'dog'; const birth = String(d.get('q-birth') || ''); const w = Number(d.get('q-weight'));
           const today = new Date().toISOString().slice(0, 10); const old = new Date(); old.setFullYear(old.getFullYear() - 30);
@@ -566,7 +461,7 @@ export function render() {
           const kg = d.get('q-unit') === 'lb' ? lbToKg(w) : w;
           const breed = species === 'dog' ? String(d.get('q-breed') || '').trim() : '';
           const sizeCat = breedSize(breed)?.size || String(d.get('q-size') || 'IV');
-          const wc = weightCheck({ species, name: 'your pet', breed, sizeCat, birth }, kg); if (!wc.ok) { err.textContent = wc.message; return; }
+          const wc = await calc('weightCheck', { species, name: 'your pet', breed, sizeCat, birth }, kg); if (!wc.ok) { err.textContent = wc.message; return; }
           setQuickPet({ species, name: 'your pet', breed, sizeCat, birth, sex: 'unknown', neutered: true, weightKg: Math.round(kg * 100) / 100, bcs: 5, activity: 'normal', allergies: d.getAll('q-allergies'), health: [], answered: {}, logs: [{ on: today, kg, bcs: 5 }], quick: true });
           rerender();
         });
@@ -574,37 +469,38 @@ export function render() {
       let pickerNode = null;
       bindQuickWeight(root, rerender);
       let keepPage = false;
-      const upd = () => { if (!keepPage) shown = PAGE; keepPage = false; root.querySelector('#res').innerHTML = results(withKcal(makeCtx())); };
+      let updSeq = 0;
+      const upd = async () => { if (!keepPage) shown = PAGE; keepPage = false; const mine = ++updSeq; const html = await results(makeCtx()); if (mine === updSeq) root.querySelector('#res').innerHTML = html; };
       root.querySelector('#res').addEventListener('click', (e) => { if (e.target.closest('[data-more]')) { shown += PAGE; keepPage = true; upd(); } });
       const species$ = () => state.species || curPet()?.species || 'dog';
-      const save = () => {
+      const save = async () => {
         if (!getPet()) return; const before = getGoalHistory().length;
-        setGoal({ type: goal.type, targetKg: goal.targetKg, days: goal.days, custom: goal.custom, fromChart: goal.fromChart, kcalOverride: goal.kcalOverride });
+        await setGoal({ type: goal.type, targetKg: goal.targetKg, days: goal.days, custom: goal.custom, fromChart: goal.fromChart, kcalOverride: goal.kcalOverride });
         if (getGoalHistory().length > before) toast('Goal changed. Your previous goal is kept in your goal history.');
       };
       const drawTargets = () => { root.querySelector('#targets-body').innerHTML = targetsHtml(withKcal(makeCtx()), species$()); };
       const bindGoal = () => {
         const c = makeCtx();
-        const redraw = () => { root.querySelector('#goalbox').innerHTML = goalBox({ ...c, goalKcal: kcalFor(c.pet) }); bindGoal(); };
+        const redraw = () => { root.querySelector('#goalbox').innerHTML = goalBox(makeCtx()); bindGoal(); };
         root.querySelector('#gedit')?.addEventListener('click', () => { goalOpen = true; redraw(); });
-        root.querySelector('#gdone')?.addEventListener('click', () => { goalOpen = false; state.chartOpen = false; if (pickerNode) pickerNode.open = false; save(); redraw(); root.querySelector('#res').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+        root.querySelector('#gdone')?.addEventListener('click', async () => { goalOpen = false; state.chartOpen = false; if (pickerNode) pickerNode.open = false; await save(); redraw(); root.querySelector('#res').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
         const gd = root.querySelector('#gchart-d');
         if (gd && c.pet) {
-          const pet = c.pet; const growth = chartKind(pet) === 'growth';
+          const pet = c.pet; const growth = gview.kind === 'growth';
           if (pickerNode) { gd.replaceWith(pickerNode); pickerNode.open = goalOpen || state.chartOpen; if (goalOpen) state.chartOpen = true; } // keep the live chart so a slider drag is never interrupted; opening the goal always shows it
           else {
             const start = () => {
               if (pickerNode) return; pickerNode = gd;
-              mountTargetPicker(gd.querySelector('.tpick'), pet, {
-                from: pickerFrom(pet),
+              mountTargetPicker(gd.querySelector('.tpick'), pet, gview, {
+                from: pickerFrom(),
                 onClamp: (b) => toast(`Kept within ${b.lo} to ${b.hi} kg`),
-                onChange: (d) => {
+                onChange: async (d) => {
                   const before = goal.type; let type = 'grow';
                   if (!growth) { const kg = d.kg; type = kg < pet.weightKg - 0.05 ? 'lose' : kg > pet.weightKg + 0.05 ? 'gain' : 'maintain'; }
                   goal = growth ? { type: 'grow', targetKg: d.kg, days: d.days, custom: true, fromChart: true } : { type, targetKg: d.kg, days: d.days, fromChart: true };
-                  save(); upd();
+                  await loadGoal(); save(); upd();
                   if (type !== before) { if (!growth) toast(`Switched to ${GOALS.find((g) => g.id === type).label.toLowerCase()}`); if (goalOpen) { redraw(); return; } }
-                  const cc = makeCtx(); cc.goalKcal = kcalFor(cc.pet);
+                  const cc = makeCtx();
                   const line = root.querySelector('#goalline'); if (line) line.innerHTML = goalLine(cc.pet);
                   const sum = root.querySelector('#goalsum'); if (sum) sum.innerHTML = summary(cc);
                   const tin = root.querySelector('#target'); if (tin) tin.value = goal.targetKg;
@@ -618,66 +514,61 @@ export function render() {
           }
         }
         const form = root.querySelector('#goalform'); if (!form) return;
-        const refresh = () => { c.goalKcal = kcalFor(c.pet); root.querySelector('#goalsum').innerHTML = summary(c); save(); drawTargets(); upd(); };
-        form.addEventListener('change', (e) => {
+        const refresh = async () => { await loadGoal(); const cc = makeCtx(); root.querySelector('#goalsum').innerHTML = summary(cc); save(); drawTargets(); upd(); };
+        form.addEventListener('change', async (e) => {
           if (e.target.name === 'goal') {
-            goal = { type: e.target.value, targetKg: targetFor(e.target.value, c.pet, c.plan), days: goal.days || 90 };
-            save(); redraw(); drawTargets(); upd();
+            goal = { type: e.target.value, targetKg: gv.targetFor[e.target.value], days: goal.days || 90 };
+            await loadGoal(); save(); redraw(); drawTargets(); upd();
           } else if (e.target.id === 'days') { goal.days = Number(e.target.value); if (goal.type === 'grow') { delete goal.custom; delete goal.fromChart; } refresh(); }
         });
         form.addEventListener('input', (e) => { if (e.target.id === 'target') { const v = parseFloat(e.target.value); if (v > 0) { goal.targetKg = v; refresh(); } } });
-        root.querySelector('#suggest')?.addEventListener('click', () => { goal.days = suggestDays(c.pet, goal.targetKg); save(); redraw(); drawTargets(); upd(); });
+        root.querySelector('#suggest')?.addEventListener('click', async () => { goal.days = gv.suggestDays; await loadGoal(); save(); redraw(); drawTargets(); upd(); });
       };
       bindGoal();
 
       // your own numbers (event delegation so the panel can redraw freely)
       const tbody = root.querySelector('#targets-body');
-      const hint = (row, T) => { const o = state.targets[state.unit][T.key]; const b = bounds(T, state.unit, species$()); const sb = shownBounds(b, state.unit, factorFor(T, withKcal(makeCtx()))); if (o) row.querySelector('[data-thint]').textContent = `Allowed range ${sb.lo} to ${sb.hi}. ${OP_WORD[o.op][0].toUpperCase() + OP_WORD[o.op].slice(1)} ${(o.v * sb.F).toFixed(sb.dec)} ${sb.unit}: closest foods come first.`; };
+      const hint = (row, T) => { // sync one row in place (never redrawn mid-drag): value, on/off look, rule buttons, clear button
+        const o = state.targets[state.unit][T.key]; const sb = shownBounds(bounds(T, state.unit, species$()), state.unit, factorFor(T, withKcal(makeCtx())));
+        const txt = o ? `${(o.v * sb.F).toFixed(sb.dec)} ${sb.unit}` : '';
+        row.classList.toggle('is-off', !o); row.querySelector('[data-tval]').textContent = o ? txt : 'Not set';
+        row.querySelector('[data-tclear]').hidden = !o; row.querySelector('.seg').hidden = !o;
+        const h = row.querySelector('[data-thint]'); h.hidden = !o; if (o) h.textContent = `${OP_WORD[o.op][0].toUpperCase() + OP_WORD[o.op].slice(1)} ${txt}: closest foods come first.`;
+      };
       const usePreset = (id) => { applyPreset(id, species$()); root.querySelector('#more-opts').open = true; root.querySelector('#targets').open = true; drawTargets(); upd(); toast('Suggested numbers applied. Change any you like.'); };
       root.querySelector('#targets').addEventListener('toggle', (e) => { state.targetsOpen = e.target.open; });
       root.querySelector('#more-opts').addEventListener('toggle', (e) => { if (e.target.id === 'more-opts') state.moreOpen = e.target.open; });
-      tbody.addEventListener('change', (e) => {
+      tbody.addEventListener('change', async (e) => {
         const t = e.target; const row = t.closest('[data-tkey]');
-        if (t.name === 'tunit') { state.unit = t.value; state.preset = null; drawTargets(); upd(); return; }
         if (/^op-/.test(t.name || '') && row) { state.targets[state.unit][row.dataset.tkey].op = t.value; state.preset = state.preset; hint(row, TG.find((x) => x.key === row.dataset.tkey)); upd(); return; }
-        if (t.matches('.tuse') && row) {
-          const T = TG.find((x) => x.key === row.dataset.tkey); const b = bounds(T, state.unit, species$());
-          if (t.checked) {
-            const need = curPet() && T.aafco && state.unit === 'kcal' ? nutrientTargets(curPet())[T.aafco]?.min : null;
-            state.targets[state.unit][T.key] = { v: clamp(need != null ? Math.max(b.mid, snap(need * 1.1, b.step)) : b.mid, b), op: 'about' };
-          } else delete state.targets[state.unit][T.key];
-          drawTargets(); upd(); return;
-        }
-        if (t.matches('[data-tnum]') && row) { // clamp on commit, say so
-          const T = TG.find((x) => x.key === row.dataset.tkey); const b = bounds(T, state.unit, species$()); const F = shownBounds(b, state.unit, factorFor(T, withKcal(makeCtx()))).F; let v = parseFloat(t.value) / F; // typed in the shown unit, kept per 1,000 kcal
-          if (!Number.isFinite(v)) v = b.mid; const c = clamp(v, b); if (c !== v) { const sb = shownBounds(b, state.unit, F); toast(`Kept within ${sb.lo} to ${sb.hi}`); }
-          state.targets[state.unit][T.key].v = F !== 1 ? Math.round(c * 100) / 100 : snap(c, b.step); drawTargets(); upd(); return; // grams a day keep what was typed
-        }
         if (t.matches('[data-kcal-num]')) {
-          const c = makeCtx(); const kb = kcalBounds(c.pet, goal); let v = parseFloat(t.value); if (!Number.isFinite(v)) v = goalPlan(c.pet, goal).kcal;
+          const kb = gv.kcalBounds; let v = parseFloat(t.value); if (!Number.isFinite(v)) v = Math.round(gv.suggestedKcal);
           const k = Math.min(kb.hi, Math.max(kb.lo, Math.round(v))); if (k !== Math.round(v)) toast(kb.safe && Math.round(v) < kb.lo ? `Not below the safe level of ${kb.safe} kcal a day` : `Kept within ${kb.lo} to ${kb.hi} kcal a day`);
-          goal.kcalOverride = k; save(); drawTargets(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd();
+          goal.kcalOverride = k; await loadGoal(); save(); drawTargets(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd();
         }
       });
       tbody.addEventListener('click', (e) => {
+        const xb = e.target.closest('[data-tclear]');
+        if (xb) { const row = xb.closest('[data-tkey]'); const T = TG.find((x) => x.key === row.dataset.tkey); delete state.targets[state.unit][T.key]; drawTargets(); upd(); return; }
         const btn = e.target.closest('[data-userec]'); if (!btn) return;
         const T = TG.find((x) => x.key === btn.dataset.userec); const c = makeCtx(); const min = c.targets?.[T.aafco]?.min; if (min == null) return;
         state.unit = 'kcal'; state.preset = null; const b = bounds(T, 'kcal', species$());
         state.targets.kcal[T.key] = { v: clamp(snap(min, b.step), b), op: 'min' }; drawTargets(); upd(); toast(`Minimum set to ${min} g per 1,000 kcal`);
       });
-      tbody.addEventListener('input', (e) => {
+      tbody.addEventListener('input', async (e) => {
         const t = e.target; const row = t.closest('[data-tkey]');
-        if (t.matches('[data-trange]') && row) { // slider is always in bounds
-          const T = TG.find((x) => x.key === row.dataset.tkey); row.querySelector('[data-tnum]').value = t.value;
-          state.targets[state.unit][T.key].v = parseFloat(t.value) / shownBounds(bounds(T, state.unit, species$()), state.unit, factorFor(T, withKcal(makeCtx()))).F; hint(row, T); upd();
+        if (t.matches('[data-trange]') && row) { // slider is always in bounds; dragging it turns the number on
+          const T = TG.find((x) => x.key === row.dataset.tkey); const F = shownBounds(bounds(T, state.unit, species$()), state.unit, factorFor(T, withKcal(makeCtx()))).F;
+          const cur = state.targets[state.unit][T.key];
+          state.targets[state.unit][T.key] = { v: parseFloat(t.value) / F, op: cur ? cur.op : 'about' }; hint(row, T); upd();
         } else if (t.matches('[data-kcal-range]')) {
-          document.querySelector('#kcal-in').value = t.value; goal.kcalOverride = Math.round(+t.value); save(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd();
+          document.querySelector('#kcal-in').value = t.value; goal.kcalOverride = Math.round(+t.value); await loadGoal(); save(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd();
         }
       });
-      tbody.addEventListener('click', (e) => {
+      tbody.addEventListener('click', async (e) => {
         const pb = e.target.closest('[data-preset]'); if (pb) { usePreset(pb.dataset.preset); return; }
         if (e.target.closest('#tclear')) { state.targets = { label: {}, kcal: {} }; state.preset = null; drawTargets(); upd(); }
-        if (e.target.closest('[data-kcal-reset]')) { delete goal.kcalOverride; save(); drawTargets(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd(); }
+        if (e.target.closest('[data-kcal-reset]')) { delete goal.kcalOverride; await loadGoal(); save(); drawTargets(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd(); }
       });
       root.querySelector('#goalbox').addEventListener('click', (e) => { if (e.target.closest('#gpreset')) { const id = recommendedPreset(curPet()); if (id) { usePreset(id); root.querySelector('#targets').scrollIntoView({ behavior: 'smooth', block: 'start' }); } } });
 
@@ -694,7 +585,7 @@ export function render() {
         b.setAttribute('aria-pressed', state.quick.has(id)); upd();
       }));
       root.querySelectorAll('[data-need]').forEach((b) => b.addEventListener('click', () => { const id = b.dataset.need; if (state.needs.has(id)) state.needs.delete(id); else state.needs.add(id); b.setAttribute('aria-pressed', state.needs.has(id)); syncMoreBadge(); upd(); }));
-      root.querySelector('#hide-al')?.addEventListener('change', (e) => { state.hideAllergy = e.target.checked; upd(); });
+      root.querySelector('#hide-al')?.addEventListener('change', (e) => { state.hideAllergy = e.target.checked; syncMoreBadge(); upd(); });
       const setOpen = (o) => { root.querySelector('#filters').classList.toggle('is-open', o); document.body.classList.toggle('filters-open', o); root.querySelector('#ft').setAttribute('aria-expanded', o); };
       root.querySelector('#ft').addEventListener('click', () => setOpen(!root.querySelector('#filters').classList.contains('is-open')));
       root.querySelector('#fdone').addEventListener('click', () => setOpen(false));

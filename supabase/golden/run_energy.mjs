@@ -1,7 +1,7 @@
 // node supabase/golden/run_energy.mjs   -> checks prototype/js/domain.js against data/golden/energy.json
 // node supabase/golden/run_energy.mjs --sql   -> prints one SQL statement per case; run it with psql to check public.energy_plan
 import { readFileSync } from 'node:fs';
-import { energyPlan } from '../../prototype/js/domain.js';
+import { energyPlan } from '../functions/calc/domain.js';
 
 const { cases } = JSON.parse(readFileSync(new URL('./energy.json', import.meta.url)));
 const birthFor = (m) => new Date(Date.now() - m * 30.5 * 86400000).toISOString().slice(0, 10);

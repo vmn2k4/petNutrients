@@ -1,6 +1,6 @@
 // node supabase/golden/run_goal_adjust.mjs   -> checks goalPlan() gain amount and weigh-in adjustment against goal_adjust.json
 import { readFileSync } from 'node:fs';
-import { goalPlan, effectiveGoal, weightLossKcal, growthTarget, targetBounds } from '../../prototype/js/domain.js';
+import { goalPlan, effectiveGoal, weightLossKcal, growthTarget, targetBounds } from '../functions/calc/domain.js';
 
 const { pet: base, cases } = JSON.parse(readFileSync(new URL('./goal_adjust.json', import.meta.url)));
 const DAY = 86400000; const iso = (t) => new Date(t).toISOString().slice(0, 10); const now = Date.now();

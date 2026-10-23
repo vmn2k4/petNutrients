@@ -1,7 +1,6 @@
-import { getFood, listReviews, addReview, getSaved, toggleSaved, isSignedIn } from '../store.js';
-import { estimateKcal, brandGuide, foodFit, NUTRIENTS, gramsPerDay, costPerDay, TOXIC_TERMS, allergenHits } from '../domain.js';
+import { getFood, listReviews, addReview, getSaved, toggleSaved, isSignedIn, getPet, peekQuickPet, getRegion } from '../store.js';
+import { calc } from '../calc.js';
 import { KCAL_NOTE, foodPic, card, badge, stars, meter, verdictBanner, button, icon, esc, notice, ratingInput, field, stat, pageBand, emptyState, expNote } from '../ui.js';
-import { makeCtx } from './foods.js';
 import { openAddItem } from '../diet.js';
 
 const TITLES = { good: 'Meets the nutrient targets', caution: 'Worth a closer look', bad: 'Not the best match' };
@@ -12,17 +11,18 @@ const reviewItem = (r) => `<article class="card card--flat"><div class="row row-
   <p style="margin:var(--space-3) 0">${esc(r.text)}</p><div class="chips">${badge(r.liked, 'info')}${(r.improved || []).map((i) => badge(`Improved: ${i}`, 'good')).join('')}${badge(r.rebuy ? 'Would rebuy' : 'Would not rebuy', r.rebuy ? 'good' : 'caution')}${badge(r.subscribe ? 'Would subscribe' : 'No subscription', '')}</div>
   ${!r.subscribe && r.why ? `<p class="small muted" style="margin:var(--space-3) 0 0">Why not: ${esc(r.why)}</p>` : ''}</article>`;
 
-export function render({ id }) {
-  const food0 = getFood(id); const est = food0 && !(food0.kcalPerKg > 0) ? estimateKcal(food0) : null;
-  // no calories from the maker: work them out from the label analysis and say so on the page
-  const food = est ? { ...food0, kcalPerKg: est.kcalPerKg, kcalEstimated: true, estAssumed: est.assumed, estMargin: est.margin } : food0;
-  if (!food) return { title: 'Not found', html: `${pageBand('Hmm, that food is missing', 'It may have been renamed or removed.')}<div class="page page--narrow">${emptyState({ img: 'cut-kitten', title: 'We sniffed everywhere, no luck', text: 'Try browsing the list instead.', action: button({ label: 'Back to foods', href: '/foods' }) })}</div>` };
-  const { pet, plan, targets } = makeCtx();
-  const fit = pet ? foodFit(food, pet, plan, targets) : null;
+export async function render({ id }) {
+  const food0 = getFood(id);
+  if (!food0) return { title: 'Not found', html: `${pageBand('Hmm, that food is missing', 'It may have been renamed or removed.')}<div class="page page--narrow">${emptyState({ img: 'cut-kitten', title: 'We sniffed everywhere, no luck', text: 'Try browsing the list instead.', action: button({ label: 'Back to foods', href: '/foods' }) })}</div>` };
+  // calc works out the fit, the calories (an estimate from the label analysis when the maker states none), the daily amount and cost, and the maker's table
+  const pet = getPet() || peekQuickPet() || null;
+  const d = await calc('foodDetail', pet, id, getRegion());
+  const food = d.estimated ? { ...food0, kcalPerKg: d.kcalPerKg, kcalEstimated: true, estAssumed: d.estAssumed, estMargin: d.estMargin } : food0;
+  const plan = d.plan; const fit = d.fit;
   const revs = listReviews(food.id);
-  const g = plan && !plan.hideKcal && gramsPerDay(food, plan.kcal); const c = plan && !plan.hideKcal && costPerDay(food, plan.kcal);
+  const g = d.grams; const c = d.cost;
   const showBowl = !!(g && pet && bowlView); const scale = showBowl ? plan.kcal / 1000 : 1;
-  const flagged = (ing) => TOXIC_TERMS.some((t) => (!t.species || t.species === food.species) && ing.toLowerCase().includes(t.term)) || (!!pet && allergenHits({ ingredients: [ing] }, pet).length > 0);
+  const flagged = (ing) => !!d.flagged[food.ingredients.indexOf(ing)];
   return {
     title: `${food.brand} ${food.name} Review: Calories, AAFCO & Cost per Day`,
     html: `${pageBand(food.name, `${esc(food.brand)}${food.reviews ? `, ${stars(food.rating)} ${food.rating} from ${food.reviews} owners` : ', no owner reviews yet'}`, `<div class="chips" style="margin-top:var(--space-4)">${badge(food.format, 'info')}${badge(food.species)}${badge(`Source: ${food.source}`, '')}</div>`, food.species === 'cat' ? 'cut-cat' : 'cut-beagle')}<div class="page">${expNote(' Food data can be wrong or out of date: check the label on the bag.')}<a class="btn btn--ghost" href="/foods" style="margin: 0 0 var(--space-5) calc(var(--space-4) * -1)">${icon('back')}<span>All foods</span></a>
@@ -30,7 +30,7 @@ export function render({ id }) {
         <div class="stack">
           ${fit ? verdictBanner(fit.verdict, `${TITLES[fit.verdict]} for ${esc(pet.name)}`, fit.warn.length ? fit.warn.map((w) => esc(w.text)).join('<br>') : 'It meets the protein, fat, calcium and phosphorus targets for their life stage. We do not check vitamins or whether the food is complete and balanced, so read the bag too.') : notice(isSignedIn() ? `<a href="/new">Create a pet profile</a> to see whether this food fits.` : `<button class="linkbtn" type="button" data-signup data-then="/new">Create a free account</button> to see whether this food fits your pet, or <a href="/foods">add your pet's details</a> on the foods page.`)}
           ${card(`<div class="row row--between"><h2 style="margin:0">What is in each bowl</h2>${g ? `<div class="chips" role="group" aria-label="Show nutrients">${button({ label: 'Daily bowl', variant: bowlView ? 'primary' : 'secondary', attrs: 'data-view="bowl" type="button"' })}${button({ label: 'Per 1,000 kcal', variant: bowlView ? 'secondary' : 'primary', attrs: 'data-view="kcal" type="button"' })}</div>` : ''}</div>
-            <p class="hint">${showBowl ? `${esc(pet.name)}'s daily bowl: ${Math.round(g)} g a day (${Math.round(plan.kcal)} kcal). Wet and dry foods compare fairly because each bowl gives the same calories. Ticks mark the AAFCO minimum and maximum for their life stage.` : 'Shown per 1000 calories, so wet and dry foods compare fairly. Ticks mark the AAFCO minimum and maximum for their life stage.'}</p><div class="stack">${(fit ? fit.checks : NUTRIENTS.slice(0, 4).map((n) => ({ label: n.label, value: n.get(food), target: {}, state: '' }))).map((k) => meter({ label: k.label, value: k.value == null ? null : k.value * scale, unit: 'g', min: k.target?.min == null ? undefined : k.target.min * scale, max: k.target?.max == null ? undefined : k.target.max * scale, state: k.state === 'unknown' ? '' : k.state })).join('')}</div>
+            <p class="hint">${showBowl ? `${esc(pet.name)}'s daily bowl: ${Math.round(g)} g a day (${Math.round(plan.kcal)} kcal). Wet and dry foods compare fairly because each bowl gives the same calories. Ticks mark the AAFCO minimum and maximum for their life stage.` : 'Shown per 1000 calories, so wet and dry foods compare fairly. Ticks mark the AAFCO minimum and maximum for their life stage.'}</p><div class="stack">${(fit ? fit.checks : ['Protein', 'Fat', 'Calcium', 'Phosphorus'].map((label, i) => ({ label, value: d.nutrients[i], target: {}, state: '' }))).map((k) => meter({ label: k.label, value: k.value == null ? null : k.value * scale, unit: 'g', min: k.target?.min == null ? undefined : k.target.min * scale, max: k.target?.max == null ? undefined : k.target.max * scale, state: k.state === 'unknown' ? '' : k.state })).join('')}</div>
             <p class="hint">Labels list minimums and maximums, not exact amounts. Calcium and phosphorus help build bones, but many labels skip them, so you may see "not reported".</p>`)}
           ${card(`<h2>Ingredients</h2><div class="chips">${food.ingredients.length ? food.ingredients.map((i) => badge(i, flagged(i) ? 'bad' : '', flagged(i) ? 'alert' : '')).join('') : '<span class="muted">Not listed in our data. Check the bag.</span>'}</div><p class="hint" style="margin-top:var(--space-3)">Ingredient lists are copied from the maker's website or label and are not always complete or marked correctly. Allergy and safety flags only match the words listed here, and a vague term such as "natural flavor" can hide something. Always read the ingredient list on the bag before you feed it.</p>${food.partialIngredients ? '<p class="hint" style="margin-top:var(--space-3)">Only the main ingredients are listed here. Check the full list on the bag.</p>' : ''}${food.credit ? `<p class="hint" style="margin-top:var(--space-2)">Data: ${esc(food.credit)}.</p>` : ''}`)}
           ${card(`<h2>What other owners say</h2><div class="grid grid--3" style="margin-bottom:var(--space-5)">${food.reviews ? `${stat(`${food.rebuy}%`, 'would buy again')}${stat(`${food.subscribe}%`, 'would subscribe')}${stat(food.reviews, 'reviews')}` : ''}</div>
@@ -52,7 +52,7 @@ export function render({ id }) {
             ${food.kcalEstimated ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-caution)">${icon('alert')} The maker does not state calories for this food, so ${Math.round(food.kcalPerKg / 10)} kcal per 100 g is our estimate from its protein, fat, moisture${food.estAssumed.length ? ` and typical ${food.estAssumed.join(' and ')}` : ''} (about ${food.estMargin}% either way). Check the bag.</p>` : ''}
             ${food.kcalPerKg ? '' : '<p class="small muted" style="margin:var(--space-3) 0 0">Calories are not reported for this food, so we cannot work out a daily amount.</p>'}
             <p class="hint">Energy: ${food.kcalPerKg ? `${food.kcalPerKg} kcal/kg` : 'not reported'}${food.kcalPerCup ? ` · ${food.kcalPerCup} kcal per cup` : ''}${food.kcalPerUnit ? ` · ${food.kcalPerUnit} kcal per ${esc(food.kcalUnit || 'unit')}` : ''} · Protein ${food.protein ?? 'not reported'}% · Fat ${food.fat ?? 'not reported'}% · Fibre ${food.fibre ?? 'not reported'}% · Moisture ${food.moisture ?? 'not reported'}%</p>
-            ${(() => { const bg = pet ? brandGuide(food, pet.weightKg) : null; const rows = food.guide || [];
+            ${(() => { const bg = d.guide; const rows = food.guide || [];
               if (!rows.length) return '<p class="small muted" style="margin:var(--space-3) 0 0">We have not found a feeding table from the maker for this food. Check the bag.</p>';
               const gtxt = (r) => (r.grams_per_day_min != null ? `${Math.round(r.grams_per_day_min)}${r.grams_per_day_max !== r.grams_per_day_min ? ` to ${Math.round(r.grams_per_day_max)}` : ''} g` : `${r.amount_min === r.amount_max ? r.amount_min : `${r.amount_min} to ${r.amount_max}`} ${esc(r.unit)}${r.amount_max > 1 && r.unit !== 'g' ? 's' : ''}`);
               return `<h3 style="margin:var(--space-3) 0 var(--space-1)">What the maker recommends</h3>${bg && !bg.covers ? `<p class="small muted" style="margin:0 0 var(--space-2)">${esc(pet.name)} weighs ${Math.round(pet.weightKg * 10) / 10} kg, ${bg.side === 'above' ? 'above' : 'below'} the maker's table, so we do not show an amount. Check the bag.</p>` : bg ? `<p class="small" style="margin:0 0 var(--space-2)">For ${esc(pet.name)} (${Math.round(pet.weightKg * 10) / 10} kg): <strong>${gtxt(bg.row)} a day</strong>${bg.exact ? '' : ' <span class="muted">(about the closest weight on their table)</span>'}${g && bg.grams ? `<span class="muted"> · our calorie-based amount is ${Math.round(g)} g</span>` : ''}</p>` : ''}

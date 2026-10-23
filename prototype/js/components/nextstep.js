@@ -1,10 +1,8 @@
 // NEXT STEP: one suggestion on Home, never a menu. The first item that applies wins.
-import { getDiet } from '../store.js';
-import { currentDiet } from '../domain.js';
 import { card, button, esc } from '../ui.js';
 
-export function nextStepHtml(pet, plan) {
-  const hasDiet = currentDiet(getDiet()).length > 0;
+export function nextStepHtml(pet, s) {
+  const hasDiet = s.hasDiet;
   let t = null;
   if (!hasDiet && !pet.dietSkipped) t = { title: `Add what ${esc(pet.name)} eats`, text: '', btn: button({ label: 'Add their food', href: '/pet/diet?add=1', variant: 'secondary', iconName: 'plus' }) };
   else t = { title: 'Find a food that fits', text: '', btn: button({ label: 'Find food', href: '/foods', variant: 'secondary', iconName: 'arrow' }) };

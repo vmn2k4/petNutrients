@@ -1,6 +1,8 @@
 import { stepper, choiceGroup, field, selectField, comboField, mountCombos, sizeBlock, bindBreedSize, button, notice, icon, esc, pageBand } from '../ui.js';
 import { DOG_BREEDS } from '../reference.js';
-import { SIZE_CATEGORIES, breedSize, lbToKg, round, weightCheck } from '../domain.js';
+import { SIZE_CATEGORIES, breedSize } from '../reference.js';
+import { lbToKg, round } from '../format.js';
+import { calc } from '../calc.js';
 import { savePet, getPet, updatePet, isSignedIn, peekQuickPet, setQuickPet, hasRegion, getRegion, setRegion, REGIONS, getPets } from '../store.js';
 import { FIELDS } from '../components/petfields.js';
 import { profileGate } from '../account.js';
@@ -31,7 +33,7 @@ function view() {
       ${field({ id: 'birth', label: 'Date of birth (or your best estimate)', type: 'date', value: d.birth, attrs: `min="${isoYearsAgo(30)}" max="${isoYearsAgo(0)}" required`, hint: 'We work out the age from it, so it stays right as they grow.' })}`,
     () => `<div class="input-row">${field({ id: 'weight', label: 'Current weight', type: 'number', value: d.weight, attrs: 'step="0.1" min="0.1" inputmode="decimal" required' })}${selectField({ id: 'unit', label: 'Unit', value: d.unit, options: [{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }] })}</div>
            ${notice('Next, a few optional questions make the plan more accurate.')}`,
-    () => `<p class="muted" style="margin:0">Skip any of this. We use sensible defaults and you can change it later on Profile.</p>${OPTIONAL.map((k) => FIELDS[k].body(draftPet())).join('')}`,
+    () => `<p class="muted" style="margin:0">Skip any of this. We use sensible defaults and you can change it later on Profile.</p>${OPTIONAL.map((k) => FIELDS[k].body(draftPet(), draftSummary)).join('')}`,
     () => `<p class="lead" style="margin:0">Add what ${esc(saved?.name || 'they')} eats and we compare it with the daily calories they need. You can also skip this and add it any time from the Diet tab.</p>`,
   ][step]();
   const diet = step === STEPS;
@@ -58,10 +60,11 @@ function collect(form) {
   if (step === 1) d.breed = (f.get('breed') || '').toString().trim();
 }
 
-function validate() {
+let draftSummary = null; // calc's summary of the draft pet, loaded when the optional step opens (it holds the activity answers)
+async function validate() {
   if (step === 0 && !d.name.trim()) return 'What do you call them? Add a name to continue.';
   if (step === 1) { if (!d.birth) return 'Add a date of birth. A rough estimate is fine.'; if (d.birth > isoYearsAgo(0)) return 'Date of birth cannot be in the future.'; if (d.birth < isoYearsAgo(30)) return 'That looks too long ago. Please check the date.'; }
-  if (step === 2) { const w = Number(d.weight); if (!(w > 0)) return 'Add their weight so we can size portions.'; const kgw = d.unit === 'lb' ? lbToKg(w) : w; const wc = weightCheck({ species: d.species, name: d.name, breed: d.breed, sizeCat: breedSize(d.breed)?.size || d.sizeCat, birth: d.birth }, kgw); if (!wc.ok) return wc.message; }
+  if (step === 2) { const w = Number(d.weight); if (!(w > 0)) return 'Add their weight so we can size portions.'; const kgw = d.unit === 'lb' ? lbToKg(w) : w; const wc = await calc('weightCheck', { species: d.species, name: d.name, breed: d.breed, sizeCat: breedSize(d.breed)?.size || d.sizeCat, birth: d.birth }, kgw); if (!wc.ok) return wc.message; }
   if (step === 2 && !acked()) { const box = document.getElementById('ack'); if (!box?.checked) return 'Please tick the box to confirm you will check with your vet.'; try { localStorage.setItem(ACK_KEY, '1'); } catch { /* storage blocked */ } }
   return '';
 }
@@ -72,7 +75,7 @@ const draftPet = () => ({ species: d.species, name: d.name, breed: d.breed, size
 // Read the optional answers with the same field definitions Profile uses.
 function readOptional(form) {
   const f = new FormData(form); const dp = draftPet(); let patch = { answered: {} };
-  for (const k of OPTIONAL) { const r = FIELDS[k].read(f, dp); patch = { ...patch, ...r, answered: { ...patch.answered, ...r.answered } }; }
+  for (const k of OPTIONAL) { const r = FIELDS[k].read(f, dp, draftSummary); patch = { ...patch, ...r, answered: { ...patch.answered, ...r.answered } }; }
   return patch;
 }
 
@@ -89,11 +92,12 @@ function finish(extra = {}) {
   });
 }
 
-export function render() {
+export async function render() {
   if (!isSignedIn()) return profileGate();   // no account, no profile
   const adding = new URLSearchParams(location.search).get('add') === '1';
   if (getPet() && !d && !adding && !saved) return { title: 'Your pet', html: '', mount() { location.replace('/'); } };
   if (!d) reset();
+  if (step === 3) draftSummary = await calc('petSummary', draftPet());
   return {
     title: 'Add your pet',
     html: view(),
@@ -105,11 +109,11 @@ export function render() {
       form.addEventListener('change', () => collect(form));
       root.querySelector('[data-skip-diet]')?.addEventListener('click', () => { updatePet({ dietSkipped: true }); done('/?new=1'); });
       root.querySelector('[data-skip-optional]')?.addEventListener('click', () => { finish(); step = STEPS; rerender(); window.scrollTo({ top: 0 }); });
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (step === STEPS) { done('/pet/diet?add=1'); return; }
         if (step < 3) collect(form);
-        const err = step < 3 ? validate() : '';
+        const err = step < 3 ? await validate() : '';
         if (err) { root.querySelector('#wiz-err').textContent = err; return; }
         if (step === 3) { finish(readOptional(form)); step = STEPS; rerender(); window.scrollTo({ top: 0 }); return; }
         step += 1; rerender(); window.scrollTo({ top: 0 });

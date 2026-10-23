@@ -3,8 +3,9 @@
 // onboarding if the visitor decides to sign up. The explainer text below is what search engines read.
 import { disclosure, button, card, field, choiceGroup, selectField, comboField, mountCombos, sizeBlock, bindBreedSize, notice, icon, esc, expNote } from '../ui.js';
 import { crumbsHtml, breadcrumbLd } from '../seo.js';
-import { DOG_BREEDS } from '../reference.js';
-import { SIZE_CATEGORIES, breedSize, lbToKg, round, weightCheck, energyPlan, kgToLb } from '../domain.js';
+import { DOG_BREEDS, SIZE_CATEGORIES, breedSize } from '../reference.js';
+import { lbToKg, round, kgToLb } from '../format.js';
+import { calc, calcMany } from '../calc.js';
 import { peekQuickPet as getQuickPet, setQuickPet, isSignedIn } from '../store.js';
 import { growthCardHtml, mountGrowthCard } from '../components/growthcard.js';
 
@@ -25,8 +26,7 @@ function formHtml(q) {
     ${button({ label: q ? 'Update the chart' : 'Show the growth chart', variant: q ? 'secondary' : 'primary', type: 'submit', iconName: 'chart' })}</form>`);
 }
 
-function nudgesHtml(pet) {
-  const plan = energyPlan(pet);
+function nudgesHtml(pet, plan) {
   const kcal = plan.hideKcal ? `<p class="muted" style="margin:0">Please ask your vet how much to feed.</p>`
     : showKcal ? `<div class="kcal-reveal"><strong class="kcal-hero">${Math.round(plan.kcal)}</strong> <span class="muted">kcal a day</span><p class="hint" style="margin:var(--space-2) 0 0">Approximate, from age and weight. Please confirm with your vet.</p></div>`
       : button({ label: 'Show daily calories', variant: 'secondary', iconName: 'arrow', attrs: 'data-kcal' });
@@ -46,15 +46,16 @@ const ARTICLE = `<div class="stack-lg">
   <div class="row">${button({ label: 'Read the full guide', href: '/guides/puppy-growth-chart', variant: 'ghost', iconName: 'book' })}</div>
 </div>`;
 
-export function render() {
+export async function render() {
   const crumbs = [{ name: 'Home', path: '/' }, { name: 'Growth chart', path: '/growth' }];
   const q = getQuickPet(); const pet = q ? toPet(q) : null;
+  const [s, v] = pet ? await calcMany([['petSummary', pet], ['growthPageView', pet]]) : [null, null];
   return {
     title: 'Puppy & Kitten Growth Chart + Adult Weight Calculator',
     description: "Track your puppy's or kitten's weight by week and see if they're on curve. Estimates adult size for purebred and mixed-breed puppies. Free.",
     html: `<div class="page page--app page--stack"><header class="apphead"><h1>Growth chart</h1></header>
       ${crumbsHtml(crumbs)}<script type="application/ld+json">${JSON.stringify(breadcrumbLd(crumbs))}</script>
-      <div class="stack">${pet ? `${growthCardHtml(pet, { actions: false })}${disclosure('Change details', formHtml(q))}${nudgesHtml(pet)}` : formHtml(q)}
+      <div class="stack">${pet ? `${growthCardHtml(pet, v, { actions: false })}${disclosure('Change details', formHtml(q))}${nudgesHtml(pet, s.plan)}` : formHtml(q)}
       </div>
       <div class="app-note">${expNote()}</div>
       <section class="article" aria-label="About the growth chart">${ARTICLE}</section></div>`,
@@ -65,7 +66,7 @@ export function render() {
       if (species() === 'dog') bindBreedSize(root, { breedId: 'breed', sizeId: 'sizeCat', lookup: breedSize, labelOf: (id) => SIZE_CATEGORIES.find((s) => s.id === id)?.label || id });
       // Switching dog/cat changes which fields apply, so the form is redrawn with what has been typed so far.
       form.querySelectorAll('[name=species]').forEach((r) => r.addEventListener('change', () => { const f = new FormData(form); setQuickPet({ ...(getQuickPet() || {}), species: f.get('species'), birth: f.get('birth') || '', weightKg: Number(f.get('weight')) || 0, breed: '' }); showKcal = false; rerender(); }));
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault(); const f = new FormData(form); const err = root.querySelector('#g-err');
         const w = Number(f.get('weight')); const birth = f.get('birth'); const sp = f.get('species');
         if (!birth) { err.textContent = 'Add a date of birth. A rough estimate is fine.'; return; }
@@ -74,11 +75,11 @@ export function render() {
         const kg = f.get('unit') === 'lb' ? lbToKg(w) : w; const breed = (f.get('breed') || '').toString().trim();
         if (sp === 'dog' && breed && !DOG_BREEDS.some((b) => b.name === breed)) { err.textContent = 'Pick a breed from the list, or leave it empty.'; return; }
         const q2 = { species: sp, breed: sp === 'dog' ? breed : '', sizeCat: f.get('sizeCat') || 'IV', birth, weightKg: round(kg, 2), allergies: getQuickPet()?.allergies || [] };
-        const wc = weightCheck(toPet(q2), q2.weightKg); if (!wc.ok) { err.textContent = wc.message; return; }
+        const wc = await calc('weightCheck', toPet(q2), q2.weightKg); if (!wc.ok) { err.textContent = wc.message; return; }
         showKcal = false; setQuickPet(q2); rerender();
         setTimeout(() => document.querySelector('.gchart')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       });
-      const qp = getQuickPet(); if (qp) mountGrowthCard(root, toPet(qp), rerender, { save: false });
+      const qp = getQuickPet(); if (qp) mountGrowthCard(root, toPet(qp), v, rerender, { save: false });
       root.querySelector('[data-kcal]')?.addEventListener('click', () => { showKcal = true; rerender(); });
     },
   };

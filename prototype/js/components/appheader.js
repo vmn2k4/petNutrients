@@ -2,12 +2,11 @@
 // Replaces the big decorative band on these screens so content starts higher and the page stays calm.
 import { petSwitcherHtml } from './petswitcher.js';
 import { badge, button, verdictBanner, esc } from '../ui.js';
-import { ageInMonths } from '../domain.js';
+import { ageText } from '../format.js';
 
-export const ageText = (pet) => { const m = ageInMonths(pet.birth); return m >= 24 ? `${Math.floor(m / 12)} yr${m % 12 ? ` ${m % 12} mo` : ''}` : `${m} mo`; };
-
-export function appHeader(pet, plan, { title = pet.name, facts = true, action = '' } = {}) {
-  const f = facts ? `<p class="apphead__facts">${esc(pet.species === 'dog' ? pet.breed || 'Mixed breed' : 'Cat')} · ${esc(ageText(pet))} · ${plan.stage === 'growth' ? 'Growing' : 'Adult'}</p>` : '';
+// `s` is the pet's summary from calc (petSummary).
+export function appHeader(pet, s, { title = pet.name, facts = true, action = '' } = {}) {
+  const f = facts ? `<p class="apphead__facts">${esc(pet.species === 'dog' ? pet.breed || 'Mixed breed' : 'Cat')} · ${esc(ageText(s.ageMonths))} · ${s.plan.stage === 'growth' ? 'Growing' : 'Adult'}</p>` : '';
   return `<header class="apphead">${petSwitcherHtml()}<div class="apphead__row"><div>${title === pet.name ? `<h1>${esc(title)}</h1>${f}` : `<h1 class="sr-only">${esc(title)}</h1>`}</div>${action}</div></header>`;
 }
 

@@ -1,5 +1,5 @@
 // node supabase/golden/run_mix.mjs  -> checks analyseMix() and dietKcal() with hand-worked numbers (USDA values per 100 g)
-import { analyseMix, dietKcal, dietItemKcal, unitKcalOfFood, estimateKcal, foodUnitKcal, nutrientTargets } from '../../prototype/js/domain.js';
+import { analyseMix, dietKcal, dietItemKcal, unitKcalOfFood, estimateKcal, foodUnitKcal, nutrientTargets } from '../functions/calc/domain.js';
 import { INGREDIENTS } from '../../prototype/js/ingredients-data.js';
 
 const targets = nutrientTargets({ species: 'dog', birth: '2020-01-01', weightKg: 20, bcs: 5, sizeCat: 'IV' });

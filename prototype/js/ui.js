@@ -76,7 +76,7 @@ export function mountCombos(root) {
 
 // Size follows the breed: once a known breed is typed or picked, the manual size select is replaced by a note
 // (and the select is set to the breed's size, so the saved profile agrees). Blank or unknown breed shows the select.
-// lookup(name) -> { size, min, max } | null comes from domain.js, so this stays free of data.
+// lookup(name) -> { size, min, max } | null comes from the reference tables, so this stays free of data.
 export const sizeBlock = ({ id, label, options, value, hint }) =>
   `<div data-size-field>${selectField({ id, label, value, options, hint })}</div><p class="notice notice--info" data-size-note hidden></p>`;
 

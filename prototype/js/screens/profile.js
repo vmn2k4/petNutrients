@@ -1,6 +1,6 @@
 // PROFILE (signed in): the pet's details as a tappable list, the region, reminders, and the account. Each row opens one sheet.
 import { getPet, getPets, getAccount, getProfile, removePet, setEmailReminders, signOut } from '../store.js';
-import { energyPlan } from '../domain.js';
+import { calc } from '../calc.js';
 import { bindQuickWeight } from '../quickweight.js';
 import { toast } from '../sheet.js';
 import { card, button, icon, esc, expNote } from '../ui.js';
@@ -11,7 +11,7 @@ import { planAccuracyHtml } from '../components/planaccuracy.js';
 import { breedCardHtml } from '../components/breedcard.js';
 import { noPetView } from './dashboard.js';
 
-export function render() {
+export async function render() {
   const pet = getPet();
   const acct = getAccount(); const prof = getProfile();
   const account = card(`<h2>Account</h2><p class="muted small" style="margin:0 0 var(--space-4)">${esc(acct.email || '')}</p>
@@ -24,11 +24,11 @@ export function render() {
     root.querySelector('#logout')?.addEventListener('click', async (e) => { e.currentTarget.disabled = true; await signOut(); location.assign('/'); });
   };
   if (!pet) return { title: 'Profile', html: `<div class="page page--app page--stack"><header class="apphead"><div class="apphead__row"><div><h1>Profile</h1></div></div></header><div class="stack">${card('<h2>No pet yet</h2><a class="btn btn--primary" href="/new">Start onboarding a pet</a>')}${account}</div></div>`, mount: wire };
-  const plan = energyPlan(pet);
+  const s = await calc('petSummary', pet); const plan = s.plan;
   return {
     title: `${pet.name}: profile`,
-    html: `<div class="page page--app page--stack">${appHeader(pet, plan, { title: 'Profile', facts: false })}
-      <div class="stack">${planAccuracyHtml(pet)}<div><h2 class="plist__title">${esc(pet.name)}</h2>${fieldRowsHtml(pet)}</div>
+    html: `<div class="page page--app page--stack">${appHeader(pet, s, { title: 'Profile', facts: false })}
+      <div class="stack">${planAccuracyHtml(pet, s)}<div><h2 class="plist__title">${esc(pet.name)}</h2>${fieldRowsHtml(pet, s)}</div>
       ${breedCardHtml(pet, plan)}
       ${account}
       <button class="btn btn--ghost" id="reset" type="button">${icon('trash')}<span>Remove ${esc(pet.name)}${getPets().length > 1 ? '' : ' and start over'}</span></button></div>

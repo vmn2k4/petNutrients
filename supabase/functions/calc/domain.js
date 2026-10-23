@@ -1,4 +1,4 @@
-// DOMAIN: pure business logic. No DOM, no storage, no network. (Will move to server functions + packages/domain.)
+// DOMAIN: the pet-nutrition calculations (growth, calories, goals, food fit, diet). Pure: no DOM, no storage, no network. This is the ONLY copy: the `calc` edge function runs it for the web app and the Flutter app.
 import { DOG_GROWTH, CAT_GROWTH, DOG_BREEDS, AAFCO } from './reference.js';
 
 export const LB_PER_KG = 2.20462;
@@ -862,3 +862,224 @@ export function dailyTarget(pet, plan, now = new Date()) {
   }
   return { kcal: Math.round(plan.kcal), label: plan.vetHold ? 'Approximate: confirm with your vet' : plan.stage === 'growth' ? 'For healthy growth' : 'To keep weight steady' };
 }
+
+// ---- Changes to save (pure: they return what to write, the data layer writes it). `today` is the owner's local date, "YYYY-MM-DD". ----
+
+// One call for every kind of diet change on one day: stop some foods, start others. A start can say which stop it replaces.
+// `ids` holds one new id per start (the client makes them, so a retry saves the same rows).
+export function planDietChange(pet, { date, stops = [], starts = [], ids = [], today = todayStr() }) {
+  const err = (message) => ({ ok: false, message });
+  if (!date || date > today) return err('The date cannot be in the future.');
+  if (date < pet.birth) return err('That is before your pet was born.');
+  const diet = pet.diet || [];
+  const stopped = [];
+  for (const id of stops) {
+    const it = diet.find((x) => x.id === id);
+    if (!it) return err('That food is not in the current diet.');
+    if (date < it.startedOn) return err(`${it.foodName} was only added on ${it.startedOn}, so it cannot stop before that.`);
+    stopped.push({ ...it, endedOn: date });
+  }
+  const started = [];
+  for (const [i, s] of starts.entries()) {
+    const name = String(s.foodName || '').trim();
+    if (!name) return err('Add the name of the food.');
+    if (!(Number(s.amount) > 0)) return err('Add how much they get at each meal.');
+    if (!(Number(s.timesPerDay) > 0)) return err('Add how many times a day.');
+    started.push({
+      id: ids[i], foodId: s.foodId || null, foodName: name, role: s.role || 'main', amount: Number(s.amount), unit: s.unit || 'g', timesPerDay: Number(s.timesPerDay),
+      startedOn: date, endedOn: null, replacedId: s.replacesId || null, note: s.note || null,
+      ...(Number(s.kcalPerKg) > 0 ? { kcalPerKg: Math.round(Number(s.kcalPerKg)) } : {}),
+      ...(Number(s.kcalPerUnit) > 0 ? { kcalPerUnit: Math.round(Number(s.kcalPerUnit) * 10) / 10 } : {}),
+      ...(Array.isArray(s.recipe) && s.recipe.length ? { recipe: s.recipe } : {}),
+    });
+  }
+  return { ok: true, started, stopped, diet: [...started, ...diet.map((x) => stopped.find((y) => y.id === x.id) || x)] };
+}
+
+// Undo a whole change day: remove what started that day and bring back what stopped that day.
+export function planUndo(diet, date) {
+  const removed = diet.filter((x) => x.startedOn === date);
+  const revived = diet.filter((x) => x.endedOn === date && x.startedOn !== date);
+  const next = diet.filter((x) => x.startedOn !== date).map((x) => { if (x.endedOn !== date) return x; const { endedOn, ...rest } = x; return rest; });
+  return { removed, revived, diet: next };
+}
+
+// Same goal again keeps its original start and date. A change on the same day refines it quietly. A change on a later day archives the
+// old goal in the history (with the weight at the time), then starts the new one today.
+export function planSetGoal(pet, { type, targetKg, days, custom = false, fromChart = false, kcalOverride, outcome = 'replaced', today = todayStr() }) {
+  const d = Number(days) || 90;
+  const prev = pet.goal?.targetDate ? pet.goal : null;
+  const next = { type, targetKg, days: d, ...(custom ? { custom } : {}), ...(fromChart ? { fromChart } : {}), ...(kcalOverride != null ? { kcalOverride } : {}), startOn: today, startKg: pet.weightKg, targetDate: addDaysStr(today, d) };
+  if (prev) {
+    const sameKg = next.type === 'grow' && !next.custom && !prev.custom ? true : Math.abs(prev.targetKg - next.targetKg) < 0.05;
+    if (next.type === prev.type && sameKg && next.targetDate === prev.targetDate) { const { kcalOverride: _drop, ...rest } = prev; return { goal: { ...rest, ...(kcalOverride != null ? { kcalOverride } : {}) }, archived: null }; }
+    if (prev.startOn !== today) return { goal: next, archived: { type: prev.type, startOn: prev.startOn, startKg: prev.startKg ?? pet.weightKg, targetKg: prev.targetKg, targetDate: prev.targetDate, endedOn: today, endKg: pet.weightKg, outcome } };
+  }
+  return { goal: next, archived: null };
+}
+
+export function planClearGoal(pet, { outcome = 'cleared', today = todayStr() } = {}) {
+  const g = pet.goal;
+  if (g?.targetDate && g.startOn !== today) return { goal: null, archived: { type: g.type, startOn: g.startOn, startKg: g.startKg ?? pet.weightKg, targetKg: g.targetKg, targetDate: g.targetDate, endedOn: today, endKg: pet.weightKg, outcome } };
+  return { goal: null, archived: null };
+}
+
+// ---- screen views: one call returns what a whole screen needs, so a client never recalculates anything itself ----------------------------
+const r1 = (v) => Math.round(v * 10) / 10;
+const sortedLogs = (pet) => { const byDay = new Map(); (pet.logs || []).slice().sort((a, b) => (a.on < b.on ? -1 : 1)).forEach((l) => byDay.set(l.on, l)); return [...byDay.values()]; };
+export const showsGrowthCurve = (pet) => ageInMonths(pet.birth) <= (pet.species === 'cat' ? 21 : 35);
+
+// Which kind of goal a target weight means: growing pets grow, adults lose, keep steady or gain.
+export const goalTypeForTarget = (pet, kg) => (lifeStage(pet) === 'growth' ? 'grow' : kg < pet.weightKg * 0.98 ? 'lose' : kg > pet.weightKg * 1.02 ? 'gain' : 'maintain');
+
+// The plan numbers every signed-in screen shows.
+export function petSummary(pet) {
+  const plan = energyPlan(pet);
+  return { stage: lifeStage(pet), growing: plan.stage === 'growth', ageMonths: ageInMonths(pet.birth), remaining: remainingKeys(pet), hasDiet: currentDiet(pet.diet).length > 0, activity: { band: activityBand(pet), label: activityLabel(pet), options: activityOptions(pet.species).map((o) => ({ ...o, patch: activityPatch(o.value, pet.species) })) }, plan, target: dailyTarget(pet, plan), weigh: weighStatus(pet), completeness: completeness(pet), idealKg: petIdealKg(pet), goal: effectiveGoal(pet) };
+}
+
+// Move a target to a different time frame: a growing pet keeps its percentile line, an adult moves along the same pace. Clamped to what is possible.
+export function retarget(pet, fromDays, fromKg, toDays) {
+  let kg;
+  if (showsGrowthCurve(pet)) {
+    const bands = growthBands(pet); const m0 = monthsExact(pet.birth);
+    kg = r1(weightAtPercentile(bands, m0 + toDays / 30.44, percentile(fromKg, m0 + fromDays / 30.44, bands).value));
+  } else kg = r1(pet.weightKg + (fromKg - pet.weightKg) * (toDays / fromDays));
+  const b = targetBounds(pet, toDays);
+  return { days: toDays, kg: Math.min(b.hi, Math.max(b.lo, r1(kg))), lo: b.lo, hi: b.hi };
+}
+
+// Everything the growth chart card draws, for one pet. The target check for a picked weight is a separate (cheap) call: targetCheck.
+export function growthCardView(pet) {
+  const growing = showsGrowthCurve(pet); const stage = lifeStage(pet);
+  const bands = growthBands(pet) || []; const m0 = monthsExact(pet.birth);
+  const plan = energyPlan(pet); const goal = effectiveGoal(pet);
+  const cur = growing && bands.length ? percentile(pet.weightKg, m0, bands) : null;
+  let days = 30; let kg = pet.weightKg;
+  if (goal && (goal.daysLeft ?? 0) >= 1 && (goal.targetKg ?? 0) > 0 && (goal.type !== 'grow' || goal.custom)) { days = goal.daysLeft; kg = goal.targetKg; }
+  else if (stage === 'growth' && bands.length) kg = r1(weightAtPercentile(bands, m0 + days / 30.44, percentile(pet.weightKg, m0, bands).value));
+  const b = targetBounds(pet, days);
+  const logs = sortedLogs(pet);
+  const points = logs.map((l) => ({ on: l.on, kg: l.kg, m: monthsExact(pet.birth, l.on), pct: growing && bands.length ? (({ value, edge }) => ({ value, edge }))(percentile(l.kg, monthsExact(pet.birth, l.on), bands)) : null }));
+  const pg = growing ? projectGrowth(pet) : null; const pt = growing ? null : projectTrend(pet);
+  return {
+    kind: growing ? 'growth' : 'weight', growing, stage, ageMonths: ageInMonths(pet.birth), nowM: m0, plan, goal, cur: cur && { value: cur.value, edge: cur.edge, young: !!cur.young },
+    bands, points, initial: { days, kg: Math.min(b.hi, Math.max(b.lo, r1(kg))), lo: b.lo, hi: b.hi },
+    projection: pg ? { pct: pg.pct, points: pg.points, endM: pg.endM } : pt ? { perWeek: pt.perWeek, points: pt.points, endKg: pt.endKg, endDate: pt.endDate } : null,
+    breed: pet.species === 'dog' ? breedSize(pet.breed) : null,
+    dietMarks: dietChanges(pet.diet).map((c) => ({ date: c.date, m: monthsExact(pet.birth, c.date) })),
+  };
+}
+
+// Percentile for one point (a tooltip on the chart).
+export const pointPercentile = (pet, kg, on) => { const bands = growthBands(pet); if (!bands) return null; const { value, edge } = percentile(kg, monthsExact(pet.birth, on), bands); return { value, edge }; };
+
+// The Diet screen: what is fed now, its calories against the plan, the history of changes, and what happened to weight after each.
+// `foods` are the catalogue foods the diet refers to.
+export function dietView(pet, foods = []) {
+  const s = petSummary(pet); const byId = new Map(foods.map((f) => [f.id, f]));
+  const current = currentDiet(pet.diet); const foodOf = (id) => byId.get(id) || null;
+  const items = {}; const flags = {};
+  current.forEach((it) => {
+    const f = it.foodId ? foodOf(it.foodId) : null;
+    items[it.id] = dietItemKcal(it, f);
+    if (f) { const wrongSpecies = f.species !== pet.species; flags[it.id] = { wrongSpecies, foodSpecies: f.species, bad: wrongSpecies ? null : ingredientWarnings(f, pet).warn.find((w) => w.level === 'bad') || null }; }
+  });
+  const kcal = dietKcal(current, foodOf);
+  return { ...s, current, items, flags, kcal, vs: s.target ? dietVsPlan(kcal, s.target.kcal) : { pct: null, state: 'none' }, changes: dietChanges(pet.diet), periods: dietPeriods(pet, pet.diet), treatShare: TREAT_SHARE };
+}
+
+// The add-a-food sheet, recalculated as the owner types. `p`: { mode, hit (the catalogue food picked, or null), item (the diet item being changed), itemFood,
+// unit, amount, times, kcalTyped, gpc }. Returns the units that make sense for the food, the calories per measure and the day's total.
+export function dietLiveView(pet, p) {
+  const unit0 = p.mode === 'amount' && p.item ? p.item.unit : p.unit; const hit = p.mode !== 'amount' ? p.hit : null;
+  const allowed = hit ? ['g', 'cup', ...(unitKcalOfFood('can', hit) ? ['can'] : []), ...(unitKcalOfFood('piece', hit) ? ['piece'] : [])] : null;
+  const unit = allowed && p.mode !== 'amount' && !allowed.includes(unit0) ? 'g' : unit0;
+  const perG = hit ? foodUnitKcal('g', hit) : null;
+  const needGrams = !!(hit && unit === 'cup' && !unitKcalOfFood('cup', hit) && !foodUnitKcal('cup', hit) && perG);
+  const u0 = hit ? foodUnitKcal(unit, hit) : null;
+  const placeholder = u0 ? (unit === 'g' ? Math.round(u0.per * 100) : Math.round(u0.per * 10) / 10) : null;
+  const view = { allowed, unit, needGrams, placeholder, hasLabel: !!u0, pieceName: hit && hit.kcalUnit && !/can|tin/i.test(hit.kcalUnit) ? hit.kcalUnit : null, out: null };
+  const amount = Number(p.amount); const times = Number(p.times);
+  if (p.mode === 'stop' || !(amount > 0) || !(times > 0)) return view;
+  let per = null; let src = ''; let mg = null;
+  if (p.mode === 'amount' && p.item) { const ik = dietItemKcal(p.item, p.itemFood || null); per = ik ? ik.perUnit : null; src = ik ? ik.source : ''; mg = ik ? ik.margin : null; }
+  else {
+    const v = Number(p.kcalTyped);
+    if (v > 0) { per = unit === 'g' ? v / 100 : v; src = 'yours'; }
+    else if (hit && needGrams) { const gpc = Number(p.gpc); per = gpc > 0 && perG ? perG.per * gpc : null; src = 'yours'; }
+    else if (hit) { const u = foodUnitKcal(unit, hit); per = u ? u.per : null; src = u ? u.source : ''; mg = u ? u.margin : null; }
+  }
+  const plan = energyPlan(pet); const kM = per ? Math.round(amount * per) : 0; const kD = per ? Math.round(amount * times * per) : 0;
+  view.out = { per, src, mg, kM, kD, dayAmount: Math.round(amount * times * 10) / 10, pct: per && !plan.hideKcal ? Math.round((kD / plan.kcal) * 100) : null };
+  return view;
+}
+
+// What a treat means for this pet: how many fit in a day, and the worst ingredient warning.
+export function treatHintView(pet, treat) {
+  const plan = energyPlan(pet);
+  return { plan: treatPlan(treat, pet, plan.hideKcal ? null : plan.kcal), bad: ingredientWarnings(treat, pet).warn.find((w) => w.level === 'bad') || null };
+}
+
+// A starting amount for a food picked elsewhere: grams per meal from the pet's calorie plan (our estimate, two meals a day).
+export function suggestAmount(pet, food) {
+  const pl = energyPlan(pet); if (pl.hideKcal || !food.kcalPerKg) return null;
+  const meals = 2; return { kcal: pl.kcal, meals, perMeal: Math.round(((pl.kcal / food.kcalPerKg) * 1000) / meals) };
+}
+
+// Checks what was typed for a new food before it is saved: the calories' range, and the cup weight when the label has none per cup.
+export function dietEntryCheck(food, { unit, kcalTyped, gpc, mix = false }) {
+  const kHas = kcalTyped != null && kcalTyped !== ''; const kv = Number(kcalTyped);
+  if (kHas && !(kv > 0 && kv <= (unit === 'g' ? 950 : 5000))) return { ok: false, message: unit === 'g' ? 'Calories per 100 g should be between 1 and 950.' : `Calories in one ${unit} should be between 1 and 5,000.` };
+  if (!mix && food && unit === 'cup' && !kHas && !unitKcalOfFood('cup', food) && !foodUnitKcal('cup', food) && foodUnitKcal('g', food)) {
+    const n = Number(gpc); if (!(n >= 10 && n <= 400)) return { ok: false, message: 'Add about how many grams are in one cup.' };
+    return { ok: true, cupKcal: Math.round(foodUnitKcal('g', food).per * n * 10) / 10 };
+  }
+  return { ok: true };
+}
+// Fit of many foods for one pet at once (a list). Only what the fit check reads is needed in each food.
+export function foodFits(pet, foods, { detail = false } = {}) {
+  const plan = energyPlan(pet); const targets = nutrientTargets(pet); const out = {};
+  for (const f of foods) { const fit = foodFit(f, pet, plan, targets); out[f.id] = detail ? { verdict: fit.verdict, warn: fit.warn, checks: fit.checks } : { verdict: fit.verdict }; }
+  return out;
+}
+
+// Correct the calories of a food already in the diet. `kcal` is per 100 g when the food is fed in grams, else per one measure.
+export function planDietKcal(item, kcal) {
+  const grams = item.unit === 'g'; const v = Number(kcal);
+  if (!(v > 0) || v > (grams ? 950 : 5000)) return { ok: false, message: grams ? 'Calories per 100 g should be between 1 and 950.' : 'Calories in one measure should be between 1 and 5,000.' };
+  return grams ? { ok: true, kcalPerKg: Math.round(v * 10), kcalPerUnit: null } : { ok: true, kcalPerKg: null, kcalPerUnit: Math.round(v * 10) / 10 };
+}
+
+// The saved goal as the goal card shows it: its fixed date, the calories, and progress against the ORIGINAL plan.
+export function goalSummaryView(pet) {
+  const g = effectiveGoal(pet); if (!g) return null;
+  return { goal: g, plan: goalPlan(pet, g), progress: goalProgress(pet, g) };
+}
+
+// Roughly when each dog size stops growing; cats about 14 months. Only used to label the "fully grown" estimate.
+const GROWN_AT = { I: 10, II: 11, III: 12, IV: 15, V: 18, VI: 24 };
+// "If nothing changes": where the pet is heading on the track it is on now, and how that compares with the saved goal.
+export function forecastView(pet) {
+  const g = effectiveGoal(pet); const live = g && !g.expired ? g : null;
+  if (showsGrowthCurve(pet)) {
+    const pj = projectGrowth(pet); if (!pj) return null;
+    const anchors = []; const m0 = pj.m0;
+    if (m0 + 3 < pj.endM - 1) anchors.push([m0 + 3, 'in3']);
+    if (m0 < 10.5 && Math.abs(12 - (m0 + 3)) > 1.5) anchors.push([12, 'at12']);
+    const grown = Math.min(pj.endM, pet.species === 'cat' ? 14 : GROWN_AT[pet.sizeCat] || 15);
+    if (grown > m0 + 1) anchors.push([grown, 'grown']);
+    const stats = anchors.slice(0, 3).map(([m, kind]) => { const sp = pj.spread(m); return { kind, m, kg: pj.kgAtMonth(m), lo: sp.lo, hi: sp.hi }; });
+    let vs = null;
+    if (live) { const at = pj.kgAtDate(live.targetDate); vs = { at, goalKg: live.targetKg, diff: at - live.targetKg, tol: Math.max(0.6, 0.03 * live.targetKg), date: live.targetDate }; }
+    return { kind: 'growth', pct: pj.pct, stats, vs };
+  }
+  const tr = projectTrend(pet);
+  if (!tr) return { kind: 'weight', none: true };
+  let vs = null;
+  if (live && live.daysLeft > 0) vs = { at: tr.kgAtDate(live.targetDate), goalKg: live.targetKg, need: (live.targetKg - pet.weightKg) / (live.daysLeft / 7), date: live.targetDate };
+  return { kind: 'weight', perWeek: tr.perWeek, endKg: tr.endKg, endDate: tr.endDate, days: tr.days, vs };
+}
+
+// Everything the growth card, its goal summary and the forecast need, in one call.
+export function growthPageView(pet) { return { ...growthCardView(pet), summary: goalSummaryView(pet), forecast: forecastView(pet) }; }

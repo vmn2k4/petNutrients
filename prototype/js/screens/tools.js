@@ -1,7 +1,9 @@
 import { TOXIC_ITEMS } from '../mock-data.js';
 import { INGREDIENTS } from '../ingredients-data.js';
 import { openSheet, toast } from '../sheet.js';
-import { analyseMix, nutrientTargets, energyPlan, DIET_ROLES, todayStr } from '../domain.js';
+import { calcMany } from '../calc.js';
+import { DIET_ROLES } from '../reference.js';
+import { todayStr } from '../format.js';
 import { getPet, changeDiet } from '../store.js';
 import { GUIDES } from '../guides-data.js';
 import { guideCard } from './guides.js';
@@ -25,19 +27,26 @@ function mixBase() {
   const base = pet || { species, birth: new Date(Date.now() - 4 * 365 * 86400000).toISOString().slice(0, 10), weightKg: 20, bcs: 5, sizeCat: 'IV' };
   return { pet, species, base };
 }
-const currentMix = () => { const { base } = mixBase(); return analyseMix(rows, INGREDIENTS, nutrientTargets(base), { mode, batchG }); };
+// The mix and the pet's plan come from calc (the ingredient table is bundled there); refreshMix asks again after every change.
+let cur = null;
+async function refreshMix() {
+  const { base } = mixBase();
+  const [mix, summary] = await calcMany([['mixAnalysis', base, rows, { mode, batchG }], ['petSummary', base]]);
+  cur = { mix, plan: summary.plan };
+}
+const currentMix = () => cur.mix;
 
 function recipeOut() {
-  const { pet, species, base } = mixBase(); const a = analyseMix(rows, INGREDIENTS, nutrientTargets(base), { mode, batchG });
+  const { pet, species } = mixBase(); const a = cur.mix; const plan = cur.plan;
   if (!a.grams) return notice('Add an ingredient and an amount to get started.');
   if (!(a.kcal > 0)) return notice('This mix has no calories yet. Add a food ingredient, not only water.');
   const bad = a.rows.filter((r) => r.state === 'bad'); const unknown = a.rows.filter((r) => r.state === 'unknown');
   const pctNote = a.pctSum != null && Math.abs(a.pctSum - 100) > 0.5 ? notice(`The percentages add up to ${fmt1(a.pctSum)}%. The numbers below describe only what is listed, not a full 100%. ${a.pctSum < 100 ? 'Add the rest (for example water) or raise an amount.' : 'Lower an amount so it adds up to 100%.'}`, 'caution') : '';
   const raw = a.lines.some((l) => l.state === 'raw' && /chicken|turkey|duck|beef|lamb|pork|venison|rabbit|liver|heart|kidney|tripe|gizzard|salmon|cod|whitefish|herring|mackerel|egg/i.test(l.name));
   const ratioNote = species === 'dog' && a.ratio != null && (a.ratio < 1 || a.ratio > 2) ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-caution)">${icon('alert')} Calcium to phosphorus is ${a.ratio.toFixed(2)} to 1. AAFCO asks for between 1 to 1 and 2 to 1.</p>` : '';
-  const grams = pet ? (energyPlan(pet).hideKcal ? null : (energyPlan(pet).kcal / a.kcalPer100g) * 100) : null;
+  const grams = pet ? (plan.hideKcal ? null : (plan.kcal / a.kcalPer100g) * 100) : null;
   return `<div class="stack">${pctNote}${card(`<div class="grid grid--3">${stat(`${fmt1(a.kcalPer100g)}`, 'kcal per 100 g', `${Math.round(a.kcalPerKg).toLocaleString('en-US')} kcal per kg`)}${stat(`${Math.round(a.moisturePct)}%`, 'water in the mix')}${stat(`${Math.round(a.grams)} g`, 'listed in total', `${Math.round(a.kcal)} kcal`)}</div>
-    ${grams ? `<p class="small" style="margin:var(--space-3) 0 0">${esc(pet.name)} needs about ${Math.round(energyPlan(pet).kcal)} kcal a day, so about <strong>${Math.round(grams)} g</strong> of this mix a day if it were their whole diet. ${esc(KCAL_NOTE)}</p>` : ''}`)}
+    ${grams ? `<p class="small" style="margin:var(--space-3) 0 0">${esc(pet.name)} needs about ${Math.round(plan.kcal)} kcal a day, so about <strong>${Math.round(grams)} g</strong> of this mix a day if it were their whole diet. ${esc(KCAL_NOTE)}</p>` : ''}`)}
     ${card(`<div class="row row--between"><h2 style="margin:0">Per 1000 kcal</h2>${bad.length ? verdictBadge('bad', `${bad.length} gap${bad.length > 1 ? 's' : ''} found`) : unknown.length ? verdictBadge('caution', 'Not fully checked') : verdictBadge('good', 'No gaps on these 4 nutrients')}</div>
     <p class="muted small">${pet ? `Checked against ${esc(pet.name)}'s profile.` : 'Checked against an adult dog. Add a profile to personalise.'}</p>
     <div class="stack">${a.rows.map((r) => meter({ label: r.label, value: r.value, unit: 'g', min: r.target?.min, max: r.target?.max, state: r.state })).join('')}</div>${ratioNote}`)}
@@ -49,7 +58,7 @@ function recipeOut() {
 
 function openToDiet(root) {
   const pet = getPet(); const mix = currentMix(); if (!pet || !(mix.kcal > 0)) return;
-  const plan = energyPlan(pet); const perDay = plan.hideKcal ? null : (plan.kcal / mix.kcalPer100g) * 100;
+  const plan = cur.plan; const perDay = plan.hideKcal ? null : (plan.kcal / mix.kcalPer100g) * 100;
   openSheet({
     title: 'Add this mix to the diet',
     body: `<form id="mx" class="stack" novalidate>
@@ -62,9 +71,9 @@ function openToDiet(root) {
       <div id="mx-err" class="error-text" role="alert"></div>
       <div class="row row--between">${button({ label: 'Cancel', variant: 'ghost', attrs: 'data-close' })}${button({ label: 'Save to diet', type: 'submit', iconName: 'check' })}</div></form>`,
     onMount: (body, close) => {
-      body.querySelector('#mx').addEventListener('submit', (e) => {
+      body.querySelector('#mx').addEventListener('submit', async (e) => {
         e.preventDefault(); const err = body.querySelector('#mx-err'); err.textContent = '';
-        const r = changeDiet({ date: todayStr(), stops: [], starts: [{ foodName: body.querySelector('#mx-name').value.trim() || 'Homemade mix', foodId: null, role: body.querySelector('#mx-role').value, amount: Number(body.querySelector('#mx-amount').value), unit: 'g', timesPerDay: Number(body.querySelector('#mx-times').value), kcalPerKg: Math.round(mix.kcalPerKg), recipe: mix.lines.map((l) => ({ id: l.id, name: l.name, grams: Math.round(l.grams * 10) / 10 })) }] });
+        const r = await changeDiet({ date: todayStr(), stops: [], starts: [{ foodName: body.querySelector('#mx-name').value.trim() || 'Homemade mix', foodId: null, role: body.querySelector('#mx-role').value, amount: Number(body.querySelector('#mx-amount').value), unit: 'g', timesPerDay: Number(body.querySelector('#mx-times').value), kcalPerKg: Math.round(mix.kcalPerKg), recipe: mix.lines.map((l) => ({ id: l.id, name: l.name, grams: Math.round(l.grams * 10) / 10 })) }] });
         if (!r.ok) { err.textContent = r.message; return; }
         close(); toast('Added to the diet'); const note = root.querySelector('#to-diet'); if (note) note.insertAdjacentHTML('afterend', ' <a href="/pet/diet">See the diet</a>');
       });
@@ -81,7 +90,8 @@ export function recipe() {
         <div class="field" id="batch-f" ${mode === 'pct' ? '' : 'hidden'}><label for="batch">Batch size (g)</label><input class="input" id="batch" type="number" min="10" step="any" inputmode="decimal" value="${batchG}"><span class="hint">Only used to show grams. Calories per 100 g do not depend on it.</span></div>
         <div id="rows" class="stack"></div>${button({ label: 'Add ingredient', variant: 'secondary', iconName: 'plus', attrs: 'id="add" type="button"' })}</form>`)}<div id="rout"></div></div></div>`,
     mount(root) {
-      const out = () => { root.querySelector('#rout').innerHTML = recipeOut(); };
+      let seq = 0;
+      const out = async () => { const mine = ++seq; await refreshMix(); if (mine === seq) root.querySelector('#rout').innerHTML = recipeOut(); };
       const draw = () => {
         root.querySelector('#rows').innerHTML = rows.map((r, i) => `<div class="input-row" style="grid-template-columns:1fr 7rem auto;align-items:end"><div class="field"><label for="ing${i}">Ingredient</label><select class="select" id="ing${i}" data-i="${i}" data-f="id">${ingOptions(r.id)}</select></div><div class="field"><label for="g${i}">${mode === 'pct' ? 'Percent' : 'Grams'}</label><input class="input" id="g${i}" type="number" min="0" step="any" inputmode="decimal" value="${r.amount}" data-i="${i}" data-f="amount"></div><button class="btn btn--ghost" type="button" aria-label="Remove ingredient ${i + 1}" data-rm="${i}">${icon('trash')}</button></div>`).join('');
         root.querySelector('#batch-f').hidden = mode !== 'pct'; out();

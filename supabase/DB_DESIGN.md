@@ -108,7 +108,7 @@ Row-level security: `pets`, `weight_logs`, `weigh_in_skips`, `saved_foods` reada
 
 Per `CLAUDE.md`, the maths lives in Postgres. Each function takes plain parameters, not a pet id, so it works before the owner has saved or signed up:
 
-- `energy_plan(species, weight_kg, bcs, neutered, activity, birth_date)`
+- (the SQL `energy_plan` and `goal_plan` were removed: calculations live in the `calc` edge function)
 - `nutrient_targets(species, stage, size_cat)`
 - `growth_percentile(species, size_cat, age_months, kg)`
 - `food_fit(product_id, pet params)` and `match_foods(pet params, filters)` for the Foods browser

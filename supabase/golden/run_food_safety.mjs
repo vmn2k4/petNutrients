@@ -1,6 +1,6 @@
 // node supabase/golden/run_food_safety.mjs   -> checks foodFit() ingredient safety against food_safety.json
 import { readFileSync } from 'node:fs';
-import { foodFit, energyPlan, nutrientTargets } from '../../prototype/js/domain.js';
+import { foodFit, energyPlan, nutrientTargets } from '../functions/calc/domain.js';
 
 const { cases } = JSON.parse(readFileSync(new URL('./food_safety.json', import.meta.url)));
 const birth = new Date(Date.now() - 4 * 365.25 * 86400000).toISOString().slice(0, 10);

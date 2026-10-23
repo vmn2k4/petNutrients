@@ -138,7 +138,7 @@ export const petTabs = (active) => `<nav class="pettabs" aria-label="My pet sect
 // Wording shown wherever a daily kcal or gram amount appears: it is an estimate, and a diet change belongs with the vet.
 export const KCAL_NOTE = 'Calories are estimates, not exact amounts. Check with your vet before starting or changing a diet, especially a weight-loss or weight-gain plan.';
 // Short persistent disclaimer shown next to estimates (growth, calories, matches, safety answers).
-export const expNote = (extra = '') => `<p class="expnote">${icon('info')} Beta and experimental. We do our best with the best information available, but it can be wrong. Not veterinary advice, and we are not responsible for decisions made from it. Check with another reliable source and your vet before acting.${extra} <a href="/disclaimer">Disclaimer</a></p>`;
+export const expNote = (extra = '') => `<p class="expnote">${icon('info')} Estimates only, not veterinary advice.${extra} <a href="/disclaimer">Details</a></p>`;
 
 // Page code is mounted on the same #app element every time a page opens or re-renders, so a plain addEventListener there piles up:
 // the second visit opens two sheets, the third three. rootOn keeps one handler per (type, key) and replaces the old one.

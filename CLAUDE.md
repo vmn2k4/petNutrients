@@ -64,7 +64,7 @@ data/             raw datasets
 - Do not parse the AAFCO Chapter 6 PDF. The AKC dog-breeds table is internal only (not cleared for commercial use).
 - BioVet data needs the attribution "Data: BioVet veterinary clinic network, bio.vet". Salt 2017, figshare, CNF and USDA need credits per DATA_GUIDE section 6.
 - Never present estimates as facts: label growth curves "estimate", and show "not verified" when a nutrient (e.g. calcium) is missing.
-- Safety: body condition 1-3, health conditions, a growing large-breed puppy needing weight loss, or pregnancy/nursing get a "talk to your vet" card.
+- Safety: body condition 1-3, health conditions, a growing large-breed puppy needing weight loss, or pregnancy/nursing get a "talk to your vet" card. Calories and portions are still shown, labelled approximate (decided 2026-10-22, replaces hiding them for an overweight growing pet): the card asks the owner to confirm with their vet and never offers a weight-loss plan for a growing pet.
 
 ## Working style
 - Develop locally first (Supabase CLI + Docker); the cloud project comes later from the same migrations.

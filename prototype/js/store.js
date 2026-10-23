@@ -12,6 +12,11 @@ const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked: stay in memory */ } };
 let mem = lsGet(KEY) || {};
 const save = () => lsSet(KEY, mem);
+// Several pets per account. mem.pets holds them all; mem.pet is always the active one (same object), which the older code paths use.
+if (mem.pet && !mem.pets) mem.pets = [mem.pet];
+if (!mem.pets) mem.pets = [];
+mem.pets.forEach((p) => { if (!p.id) p.id = newId(); });
+mem.pet = mem.pets.find((p) => p.id === mem.activeId) || mem.pets[0] || undefined;
 
 // ---------- Supabase access (REST + GoTrue, no library so the prototype needs no build step) ----------
 let session = lsGet(AUTH_KEY);
@@ -81,7 +86,8 @@ async function api(path, { method = 'GET', body, prefer, schema = 'public' } = {
 
 // Writes run one after another so an update never races the insert it depends on.
 let chain = Promise.resolve();
-const sync = (fn) => { if (!online) return; chain = chain.then(fn).catch((e) => console.warn('Sync failed, kept locally:', e.message)); };
+// petId is the pet a queued write belongs to: captured when the write is queued, so switching pets before it runs cannot send it to the wrong one.
+const sync = (fn) => { if (!online) return; const forPet = mem.pet?.id || null; chain = chain.then(() => { petId = forPet; return fn(); }).catch((e) => console.warn('Sync failed, kept locally:', e.message)); };
 
 // ---------- mapping between the app's pet object and the `pets` table ----------
 const COLS = { species: 'species', name: 'name', breed: 'breed', sizeCat: 'size_cat', birth: 'birth_date', sex: 'sex', neutered: 'neutered', weightKg: 'weight_kg', bcs: 'bcs', activity: 'activity', exerciseMin: 'exercise_min', allergies: 'allergies', health: 'health', answered: 'answered', goal: 'goal', target: 'target', skips: 'skips', remind: 'remind' };
@@ -94,7 +100,7 @@ const toRow = (obj) => {
 const fromRow = (row, logs) => {
   const pet = {};
   for (const [k, col] of Object.entries(COLS)) pet[k] = row[col];
-  pet.weightKg = Number(pet.weightKg); pet.goal = pet.goal || undefined; pet.target = pet.target || null;
+  pet.id = row.id; pet.weightKg = Number(pet.weightKg); pet.goal = pet.goal || undefined; pet.target = pet.target || null;
   pet.logs = logs.map((l) => ({ on: l.measured_on, kg: Number(l.kg), bcs: l.bcs }));
   return pet;
 };
@@ -108,11 +114,10 @@ const ageMonths = (birth) => Math.max(0, Math.round((Date.now() - new Date(birth
 function today() { return new Date().toISOString().slice(0, 10); }
 
 const insertPet = async (pet) => {
-  await api(`pets?user_id=eq.${session.uid}`, { method: 'DELETE' }); // one pet per profile for now
-  const [row] = await api('pets', { method: 'POST', body: toRow(pet), prefer: 'return=representation' });
-  petId = row.id;
+  const [row] = await api('pets', { method: 'POST', body: { id: pet.id, ...toRow(pet) }, prefer: 'return=representation' });
   const logs = pet.logs?.length ? pet.logs : [{ on: today(), kg: pet.weightKg, bcs: pet.bcs }];
-  await api('weight_logs', { method: 'POST', body: logs.map((l) => ({ pet_id: petId, measured_on: l.on, kg: l.kg, bcs: l.bcs ?? null })) });
+  await api('weight_logs', { method: 'POST', body: logs.map((l) => ({ pet_id: row.id, measured_on: l.on, kg: l.kg, bcs: l.bcs ?? null })) });
+  for (const it of pet.diet || []) await api('pet_diet_items', { method: 'POST', body: { ...toDiet(it), pet_id: row.id } }).catch(() => {});
 };
 
 // ---------- hydrate once at startup ----------
@@ -120,29 +125,34 @@ async function hydrate() {
   if (!SUPABASE_URL || !session) return; // signed out: browse only, nothing to load
   await ensureSession();
   const [pets, saved, reviews, profiles] = await Promise.all([
-    api('pets?select=*&order=created_at.desc&limit=1'), api('saved_foods?select=food_id'), api('reviews?select=*&status=eq.published&order=created_at.desc'),
+    api('pets?select=*&order=created_at.asc'), api('saved_foods?select=food_id'), api('reviews?select=*&status=eq.published&order=created_at.desc'),
     api('profiles?select=*&limit=1').catch(() => []),
   ]);
   profile = profiles[0] || null;
   online = true;
   remoteReviews = reviews.map(fromReview);
   if (pets.length) {
-    petId = pets[0].id;
-    const logs = await api(`weight_logs?select=measured_on,kg,bcs&pet_id=eq.${petId}&order=measured_on`);
-    mem.pet = fromRow(pets[0], logs);
-    const hist = await api(`pet_goals?select=*&pet_id=eq.${petId}&order=ended_on.desc,created_at.desc&limit=50`).catch(() => []);
-    mem.pet.goalHistory = hist.map((h) => ({ type: h.type, startOn: h.start_on, startKg: Number(h.start_kg), targetKg: Number(h.target_kg), targetDate: h.target_date, endedOn: h.ended_on, endKg: h.end_kg == null ? null : Number(h.end_kg), outcome: h.outcome }));
-    const diet = await api(`pet_diet_items?select=*&pet_id=eq.${petId}&order=started_on.desc,created_at.desc`).catch(() => []);
-    mem.pet.diet = diet.map(fromDiet);
-    anchorLegacyGoal();
+    const loaded = [];
+    for (const row of pets) {
+      const logs = await api(`weight_logs?select=measured_on,kg,bcs&pet_id=eq.${row.id}&order=measured_on`);
+      const p = fromRow(row, logs);
+      const hist = await api(`pet_goals?select=*&pet_id=eq.${row.id}&order=ended_on.desc,created_at.desc&limit=50`).catch(() => []);
+      p.goalHistory = hist.map((h) => ({ type: h.type, startOn: h.start_on, startKg: Number(h.start_kg), targetKg: Number(h.target_kg), targetDate: h.target_date, endedOn: h.ended_on, endKg: h.end_kg == null ? null : Number(h.end_kg), outcome: h.outcome }));
+      const diet = await api(`pet_diet_items?select=*&pet_id=eq.${row.id}&order=started_on.desc,created_at.desc`).catch(() => []);
+      p.diet = diet.map(fromDiet);
+      loaded.push(p);
+    }
+    mem.pets = loaded;
+    activate(loaded.find((p) => p.id === mem.activeId) || loaded[0]);
     mem.saved = saved.map((s) => s.food_id);
   } else {
     // first run on this account: upload whatever the browser already had
-    if (mem.pet) await insertPet(mem.pet);
+    for (const p of mem.pets) await insertPet(p);
     const ids = mem.saved || [];
     if (ids.length) await api('saved_foods', { method: 'POST', body: ids.map((food_id) => ({ food_id })), prefer: 'resolution=ignore-duplicates' });
     mem.saved = ids;
   }
+  petId = mem.pet?.id || null;
   const mine = (mem.reviews || []).filter((r) => !r.id);
   for (const r of mine) await api('reviews?on_conflict=user_id,food_id', { method: 'POST', body: reviewRow(r, mem.pet), prefer: 'resolution=merge-duplicates' }).catch(() => {});
   if (mine.length) remoteReviews = (await api('reviews?select=*&status=eq.published&order=created_at.desc')).map(fromReview);
@@ -150,28 +160,37 @@ async function hydrate() {
   save();
   try { if (sessionStorage.getItem('pnm.pendingReminders')) { sessionStorage.removeItem('pnm.pendingReminders'); setEmailReminders(true); } } catch { /* ignore */ }
 }
-try { await hydrate(); } catch (e) { console.warn('Supabase unavailable, using this browser only.', e.message); online = false; }
-export const STORE_ONLINE = online;
+
 
 // ---------- public API (same names and sync behaviour the screens already use) ----------
 export const getPet = () => (isSignedIn() ? mem.pet || null : null);
+export const getPets = () => (isSignedIn() ? mem.pets : []);
+// Make one pet the active one: every screen then shows its weights, diet and goal.
+function activate(p) {
+  mem.pet = p; mem.activeId = p?.id; anchorLegacyGoal(); save();
+}
+export const setActivePet = (id) => { const p = mem.pets.find((x) => x.id === id); if (p) activate(p); return p || null; };
+// Adds a pet and makes it the active one.
 export const savePet = (pet) => {
-  mem.pet = { ...pet, logs: pet.logs || [{ on: today(), kg: pet.weightKg, bcs: pet.bcs }] }; save();
-  const snapshot = structuredClone(mem.pet);
-  sync(() => insertPet(snapshot));
-  return mem.pet;
+  const p = { ...pet, id: newId(), logs: pet.logs || [{ on: today(), kg: pet.weightKg, bcs: pet.bcs }] };
+  mem.pets = [...mem.pets, p]; activate(p);
+  sync(() => insertPet(p));
+  return p;
 };
 export const updatePet = (patch) => {
   if (!mem.pet) return null;
-  mem.pet = { ...mem.pet, ...patch }; save();
-  const row = toRow(patch);
-  if (Object.keys(row).length) sync(async () => { if (petId) await api(`pets?id=eq.${petId}`, { method: 'PATCH', body: row }); });
+  Object.assign(mem.pet, patch); save();   // in place, so mem.pets keeps pointing at the same pet
+  const row = toRow(patch); const id = mem.pet.id;
+  if (Object.keys(row).length) sync(async () => { await api(`pets?id=eq.${id}`, { method: 'PATCH', body: row }); });
   return mem.pet;
 };
-export const clearPet = () => {
-  delete mem.pet; save();
-  sync(async () => { if (petId) await api(`pets?id=eq.${petId}`, { method: 'DELETE' }); petId = null; });
+// Removes the active pet; the next one (if any) becomes active.
+export const removePet = () => {
+  const gone = mem.pet; if (!gone) return;
+  mem.pets = mem.pets.filter((p) => p !== gone); activate(mem.pets[0]);
+  sync(async () => { await api(`pets?id=eq.${gone.id}`, { method: 'DELETE' }); });
 };
+export const clearPet = removePet;
 export const addWeighIn = (kg, bcs) => {
   const pet = mem.pet; if (!pet || !Number.isFinite(kg) || !(kg > 0)) return null; // the screens check the range; this stops a bad number reaching the saved data
   const on = today();
@@ -224,7 +243,7 @@ const fromOpff = (p) => {
 const pub = async (schema, path) => {
   const out = [];
   for (let from = 0; ; from += 1000) { // PostgREST returns at most 1000 rows a request, so the catalogue is read a page at a time
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Accept-Profile': schema, Range: `${from}-${from + 999}`, 'Range-Unit': 'items' }, signal: AbortSignal.timeout(15000) });
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Accept-Profile': schema, Range: `${from}-${from + 999}`, 'Range-Unit': 'items' }, signal: AbortSignal.timeout(10000) });
     if (!r.ok) throw new Error(`${schema}.${path}: ${r.status}`);
     const rows = await r.json(); out.push(...rows);
     if (rows.length < 1000) return out;
@@ -257,7 +276,13 @@ async function loadFoods() {
     liveSupplements = (await pub('catalog', `products?select=${scols}&product_type=eq.supplement&order=name,id`)).map(fromSupplement);
   } catch (e) { liveSupplements = []; }
 }
-try { await loadFoods(); } catch (e) { console.warn('Foods unavailable, showing sample foods.', e.message); }
+// Account data and the food catalogue load side by side, so the app waits for the slower one, not both. If either is slow or down
+// the app still opens (from this browser's saved data and the sample foods) instead of staying blank.
+await Promise.all([
+  hydrate().catch((e) => { console.warn('Supabase unavailable, using this browser only.', e.message); online = false; }),
+  loadFoods().catch((e) => console.warn('Foods unavailable, showing sample foods.', e.message)),
+]);
+export const STORE_ONLINE = online;
 
 // Owner ratings come from published reviews; a food with none shows "no reviews yet", never an invented score.
 const statsFor = (foodId) => {
@@ -266,13 +291,14 @@ const statsFor = (foodId) => {
   const pct = (k) => Math.round((100 * rs.filter((r) => r[k]).length) / rs.length);
   return { rating: Math.round((10 * rs.reduce((a, r) => a + r.stars, 0)) / rs.length) / 10, reviews: rs.length, rebuy: pct('rebuy'), subscribe: pct('subscribe') };
 };
-const withStats = (f) => (liveFoods ? { ...f, ...statsFor(f.id) } : f);
+// Prices in the catalogue are Canadian dollars, so owners in the US see no price rather than a wrong one.
+const withStats = (f) => { const g = liveFoods ? { ...f, ...statsFor(f.id) } : f; return getRegion() === 'US' ? { ...g, pricePerKg: null } : g; };
 export const STORE_FOODS_LIVE = !!liveFoods;
 // ---------- diet log: what the pet eats, with dates ----------
 // function declarations (not const arrows): the startup load below runs before the lines that define consts, so these must already exist
 function fromDiet(r) { return { id: r.id, foodId: r.food_id, foodName: r.food_name, role: r.role, amount: Number(r.amount), unit: r.unit, timesPerDay: Number(r.times_per_day), startedOn: r.started_on, endedOn: r.ended_on, replacedId: r.replaced_id, note: r.note, ...(r.kcal_per_kg ? { kcalPerKg: Number(r.kcal_per_kg) } : {}), ...(r.kcal_per_unit ? { kcalPerUnit: Number(r.kcal_per_unit) } : {}), ...(r.recipe ? { recipe: r.recipe } : {}) }; }
 function toDiet(it) { return { id: it.id, pet_id: petId, food_id: it.foodId || null, food_name: it.foodName, role: it.role || 'main', amount: it.amount, unit: it.unit || 'g', times_per_day: it.timesPerDay, started_on: it.startedOn, ended_on: it.endedOn || null, replaced_id: it.replacedId || null, note: it.note || null, ...(it.kcalPerKg ? { kcal_per_kg: it.kcalPerKg } : {}), ...(it.kcalPerUnit ? { kcal_per_unit: it.kcalPerUnit } : {}), ...(it.recipe ? { recipe: it.recipe } : {}) }; } // kcal_per_kg, kcal_per_unit and recipe are only sent when set, so a database without those columns still saves normal foods
-const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`);
+function newId() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`; }
 export const getDiet = () => (isSignedIn() ? mem.pet?.diet || [] : []);
 // One call for every kind of change on one day: stop some foods (by id), start others. A start can say which stop it replaces.
 //   changeDiet({ date, stops: [id, ...], starts: [{ foodName, foodId?, role?, amount, unit, timesPerDay, replacesId?, note? }, ...] })
@@ -464,7 +490,7 @@ export async function setNewPassword(password) {
   const r = await authReq('user', { method: 'PUT', body: { password }, token: session?.access_token });
   return r.ok ? { ok: true } : failure(r);
 }
-const wipeDevice = () => { try { localStorage.removeItem(AUTH_KEY); localStorage.removeItem(KEY); } catch { /* ignore */ } session = null; mem = {}; };
+const wipeDevice = () => { try { localStorage.removeItem(AUTH_KEY); localStorage.removeItem(KEY); } catch { /* ignore */ } session = null; mem = { pets: [] }; };
 export async function signOut() {
   if (session?.access_token) await authReq('logout', { token: session.access_token, body: {} });
   wipeDevice();
@@ -481,6 +507,25 @@ export function setEmailReminders(on) {
     await api('profiles?on_conflict=user_id', { method: 'POST', body: { email_reminders: !!on, ...(on ? { reminders_consent_at: profile.reminders_consent_at } : {}) }, prefer: 'resolution=merge-duplicates' });
     if (petId) await api(`pets?id=eq.${petId}`, { method: 'PATCH', body: { remind: !!on } });
   });
+}
+
+// ---------- region: US or Canada decides which foods are shown ----------
+// Kept on the profile when signed in, and on this device for visitors. 'all' shows every market.
+export const REGIONS = [['US', 'United States'], ['CA', 'Canada'], ['all', 'Anywhere']];
+const REGION_KEY = 'pnm.region';
+const guessRegion = () => {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if (/^America\/(Toronto|Vancouver|Edmonton|Winnipeg|Halifax|St_Johns|Regina|Moncton|Glace_Bay|Whitehorse|Yellowknife|Iqaluit)/.test(tz) || /-CA$/i.test(navigator.language || '')) return 'CA';
+  } catch { /* fall through */ }
+  return 'US';
+};
+export const hasRegion = () => { try { return !!(profile?.region || localStorage.getItem(REGION_KEY)); } catch { return !!profile?.region; } };
+export const getRegion = () => { try { return profile?.region || localStorage.getItem(REGION_KEY) || guessRegion(); } catch { return profile?.region || guessRegion(); } };
+export function setRegion(r) {
+  if (!REGIONS.some(([id]) => id === r)) return;
+  try { localStorage.setItem(REGION_KEY, r); } catch { /* storage blocked */ }
+  if (isSignedIn()) { profile = { ...(profile || {}), region: r }; sync(async () => { await api('profiles?on_conflict=user_id', { method: 'POST', body: { region: r }, prefer: 'resolution=merge-duplicates' }); }); }
 }
 
 // ---------- quick details for visitors who are not signed in ----------

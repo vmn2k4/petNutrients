@@ -36,6 +36,13 @@ export const markerFor = (pet, d) => (chartKind(pet) === 'growth'
   ? { m: monthsExact(pet.birth) + d.days / 30.44, kg: d.kg, label: `Target ${round(d.kg, 1)} kg` }
   : { t: Date.now() + d.days * 864e5, kg: d.kg, label: `Target ${round(d.kg, 1)} kg` });
 
+// "To reach this, feed about X kcal a day", with a way straight to foods that fit.
+function feedLine(pet, d) {
+  const r = targetCheck(pet, d.days, d.kg);
+  if (r.hideKcal || !(r.kcal > 0)) return '<p class="tpick__feed">Ask your vet how much to feed to reach this.</p>';
+  return `<p class="tpick__feed">To reach this, feed about <strong>${Math.round(r.kcal).toLocaleString('en-US')} kcal</strong> a day.</p>${button({ label: 'Find food that fits', href: '/foods', variant: 'secondary', iconName: 'bowl', attrs: 'data-find' })}`;
+}
+
 function resultLine(pet, d) {
   const r = targetCheck(pet, d.days, d.kg); const when = fmtDay(addDaysStr(todayStr(), d.days));
   const ic = r.pace.state === 'good' ? 'check' : r.pace.state === 'caution' ? 'alert' : 'x';
@@ -79,22 +86,19 @@ export function mountTargetPicker(root, pet, opts = {}) {
   const syncSave = () => { const b = root.querySelector('[data-save]'); if (b) b.disabled = hasSaved && d.days === base.days && Math.abs(d.kg - base.kg) < 0.05; };
   const panel = root.querySelector('[data-panel]');
   let ctl = null; let zoomOn = false; let co = null;
-  const draw = () => { panel.innerHTML = `${controls(pet, d)}<div class="tpick__res" id="tp-res" aria-live="polite">${resultLine(pet, d)}</div>`; ctl?.setTarget(markerFor(pet, d)); syncSave(); };
-  const light = () => { root.querySelector('#tp-res').innerHTML = resultLine(pet, d); ctl?.setTarget(markerFor(pet, d)); syncSave(); };
+  const draw = () => { panel.innerHTML = `${controls(pet, d)}<div class="tpick__res" id="tp-res" aria-live="polite">${resultLine(pet, d)}</div>${opts.feed ? `<div class="tpick__feedbox" id="tp-feed">${feedLine(pet, d)}</div>` : ''}`; ctl?.setTarget(markerFor(pet, d)); syncSave(); };
+  const light = () => { root.querySelector('#tp-res').innerHTML = resultLine(pet, d); const fb = root.querySelector('#tp-feed'); if (fb) fb.innerHTML = feedLine(pet, d); ctl?.setTarget(markerFor(pet, d)); syncSave(); };
   const changed = () => opts.onChange?.({ ...d });
 
-  const onPick = (pt) => {
-    d.days = Math.min(limit, Math.max(7, Math.round((growth ? (pt.m - monthsExact(pet.birth)) * 30.44 : (pt.t - Date.now()) / 864e5))));
-    d.kg = pt.kg; clamp(); draw(); changed();
-  };
   const el = root.querySelector('[data-chart]');
-  if (growth) { co = growthChartOpts(pet); zoomOn = co.zoomOn; ctl = mountGrowthChart(el, { ...co, onPick, target: markerFor(pet, d) }); }
-  else ctl = mountWeightChart(el, { ...weightChartOpts(pet), onPick, target: markerFor(pet, d) });
+  if (growth) { co = growthChartOpts(pet); zoomOn = co.zoomOn; ctl = mountGrowthChart(el, { ...co, target: markerFor(pet, d) }); }
+  else ctl = mountWeightChart(el, { ...weightChartOpts(pet), target: markerFor(pet, d) });
   root.querySelector('[data-zoom]')?.addEventListener('click', (e) => { zoomOn = !zoomOn; ctl.setOpts({ maxMonth: zoomOn ? co.zoomMax : co.fullMax }); e.currentTarget.textContent = zoomOn ? 'Show full curve' : 'Zoom in'; });
   draw();
 
   root.addEventListener('click', (e) => {
-    const h = e.target.closest('[data-h]'); if (h) { const nd = Number(h.dataset.h); d.kg = rescale(pet, d, nd); d.days = nd; clamp(); draw(); changed(); return; }
+    const h = e.target.closest('button[data-h]'); if (h) { const nd = Number(h.dataset.h); d.kg = rescale(pet, d, nd); d.days = nd; clamp(); draw(); changed(); return; }
+    if (e.target.closest('[data-find]')) opts.onFind?.({ ...d });
     if (e.target.closest('[data-save]')) opts.onSave?.({ ...d });
     if (e.target.closest('[data-clear]')) opts.onClear?.();
   });

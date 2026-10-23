@@ -574,7 +574,6 @@ details.expert { margin-top: var(--space-3); }
 
 .hz-short { display: none; }
 
-.plist { display: none; }
 
 /* the hidden attribute must always win over a component display value (.field is a grid, which showed hidden form fields) */
 [hidden] { display: none !important; }

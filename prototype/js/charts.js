@@ -109,15 +109,42 @@ export function chartLegend({ projection = false, diet = false } = {}) {
   return `<ul class="chart-legend" aria-hidden="true"><li><i class="sw sw--outer"></i>Typical range, 2nd to 98th percentile</li><li><i class="sw sw--inner"></i>Middle half, 25th to 75th</li><li><i class="sw sw--pet"></i>Your pet</li>${projection ? '<li><i class="sw sw--proj"></i>Projected on the current track</li>' : ''}${diet ? '<li><i class="sw sw--diet"></i>Diet change</li>' : ''}</ul>`;
 }
 
+
+// Hover or tap a weigh-in dot to see its details. `items` are the chart's points oldest first, in the same order the dots are drawn;
+// `info(item)` returns the HTML for the tip (date, age, weight, percentile). Large invisible circles make the dots easy to hit.
+function bindDots(container, items, info) {
+  const svg = container.querySelector('svg'); if (!svg || !info) return;
+  const dots = [...svg.querySelectorAll('.pet-dot')]; if (!dots.length) return;
+  container.style.position = 'relative';
+  const tip = document.createElement('div'); tip.className = 'dottip'; tip.hidden = true; tip.setAttribute('role', 'status'); container.appendChild(tip);
+  const show = (i) => {
+    const dot = dots[i]; const item = items[i]; if (!dot || !item) return;
+    const c = container.getBoundingClientRect(); const r = dot.getBoundingClientRect();
+    tip.innerHTML = info(item); tip.hidden = false;
+    const cx = r.left - c.left + r.width / 2; const w = tip.offsetWidth;
+    tip.style.left = `${Math.min(Math.max(cx - w / 2, 0), Math.max(0, c.width - w))}px`;
+    tip.style.top = `${Math.max(0, r.top - c.top - tip.offsetHeight - 10)}px`;
+  };
+  dots.forEach((dot, i) => {
+    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    hit.setAttribute('class', 'dot-hit'); hit.setAttribute('r', '15'); hit.setAttribute('cx', dot.getAttribute('cx')); hit.setAttribute('cy', dot.getAttribute('cy'));
+    hit.addEventListener('pointerenter', () => show(i)); hit.addEventListener('click', (e) => { e.stopPropagation(); show(i); });
+    hit.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') tip.hidden = true; });
+    svg.appendChild(hit);
+  });
+  svg.addEventListener('click', () => { tip.hidden = true; });
+}
+
 // Renders into a container at its real width, re-renders on resize, and wires the hover/tap readout.
-// opts.onPick({ m, kg }) makes the plot area clickable for choosing a target. Returns { setTarget }.
+// The chart is read-only: the target is set with the controls under it, never by clicking the plot. Returns { setTarget }.
 export function mountGrowthChart(container, opts) {
   if (!container) return null;
   let o = { ...opts };
   const draw = () => {
     const w = container.clientWidth || 640;
-    container.innerHTML = growthChart({ ...o, width: w, pick: !!o.onPick });
+    container.innerHTML = growthChart({ ...o, width: w, pick: false });
     const svg = container.querySelector('svg'); const tip = svg.querySelector('.tip'); if (!svg || o.compact) return;
+    bindDots(container, [...o.points].sort((a, b) => a.m - b.m), o.pointInfo);
     const d = svg.dataset; const max = +d.max; const ml = +d.ml; const mr = +d.mr; const mt = +d.mt; const mb = +d.mb; const W = +d.w; const H = +d.h; const top = +d.top;
     const rows = o.bands.filter((r) => r.m >= 1 && r.m <= max); const hit = svg.querySelector('.hit'); const box = svg.querySelector('.tip-box');
     const at = (e) => { const r = svg.getBoundingClientRect(); return { px: ((e.clientX - r.left) / r.width) * W, py: ((e.clientY - r.top) / r.height) * H }; };
@@ -135,7 +162,6 @@ export function mountGrowthChart(container, opts) {
     };
     hit.addEventListener('pointermove', show); hit.addEventListener('pointerdown', show);
     hit.addEventListener('pointerleave', () => { tip.hidden = true; });
-    if (o.onPick) hit.addEventListener('click', (e) => { const { px, py } = at(e); o.onPick({ m: 1 + ((px - ml) / (W - ml - mr)) * (max - 1), kg: ((H - mb - py) / (H - mt - mb)) * top }); });
   };
   draw();
   if ('ResizeObserver' in window) { let lastW = container.clientWidth; new ResizeObserver(() => { if (Math.abs(container.clientWidth - lastW) > 8) { lastW = container.clientWidth; draw(); } }).observe(container); }
@@ -187,10 +213,8 @@ export function mountWeightChart(container, opts) {
   if (!container) return null;
   let o = { ...opts };
   const draw = () => {
-    container.innerHTML = weightChart({ ...o, width: container.clientWidth || 640, pick: !!o.onPick });
-    const svg = container.querySelector('svg'); const hit = svg.querySelector('.hit'); if (!o.onPick || !hit) return;
-    const d = svg.dataset; const W = +d.w; const H = +d.h; const ml = +d.ml; const mr = +d.mr; const mt = +d.mt; const mb = +d.mb; const x0 = +d.x0; const x1 = +d.x1; const top = +d.top; const bottom = +d.bottom;
-    hit.addEventListener('click', (e) => { const r = svg.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W; const py = ((e.clientY - r.top) / r.height) * H; o.onPick({ t: x0 + ((px - ml) / (W - ml - mr)) * (x1 - x0), kg: bottom + ((H - mb - py) / (H - mt - mb)) * (top - bottom) }); });
+    container.innerHTML = weightChart({ ...o, width: container.clientWidth || 640, pick: false });
+    bindDots(container, [...o.points].sort((a, b) => new Date(a.on) - new Date(b.on)), o.pointInfo);
   };
   draw();
   if ('ResizeObserver' in window) { let last = container.clientWidth; new ResizeObserver(() => { if (Math.abs(container.clientWidth - last) > 8) { last = container.clientWidth; draw(); } }).observe(container); }

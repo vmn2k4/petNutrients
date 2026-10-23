@@ -5,29 +5,32 @@ import { runCounters } from './motion.js';
 import { initAccountUi } from './account.js';
 import { applySeo, pathOf, SITE } from './seo.js';
 
-// Logged-out visitors browse; signed-in owners get their pet as the home page.
+// Logged-out visitors get the public tools (growth chart, foods, scan, guides). Signed-in owners get their app:
+// Home, Diet, Scan (raised centre on phones), Find food, Profile. Guides and Tools stay public pages for search, linked from the footer.
 const NAV_OUT = [
   { href: '/', label: 'Home', icon: 'home', match: /^\/$/ },
-  { href: '/foods', label: 'Foods', icon: 'bowl', match: /^\/foods/ },
+  { href: '/growth', label: 'Growth chart', icon: 'chart', match: /^\/growth/ },
   { href: '/scan', label: 'Scan', icon: 'scan', match: /^\/scan/, primary: true },
-  { href: '/guides', label: 'Learn', icon: 'book', match: /^\/guides/ },
-  { href: '/tools', label: 'Tools', icon: 'flask', match: /^\/(tools|recipe|toxic|can-|growth)/ },
+  { href: '/foods', label: 'Find food', icon: 'bowl', match: /^\/foods/ },
+  { href: '/guides', label: 'Guides', icon: 'book', match: /^\/(guides|tools|recipe|toxic|can-)/ },
 ];
 const NAV_IN = [
-  { href: '/pet', label: 'Growth', icon: 'chart', match: /^\/(pet(\/growth)?|new)$/ },
+  { href: '/', label: 'Home', icon: 'home', match: /^\/$/ },
   { href: '/pet/diet', label: 'Diet', icon: 'leaf', match: /^\/pet\/diet/ },
   { href: '/scan', label: 'Scan', icon: 'scan', match: /^\/scan/, primary: true }, // third of five, so the raised button sits in the middle of the bar
   { href: '/foods', label: 'Find food', icon: 'bowl', match: /^\/foods/ },
-  { href: '/pet/profile', label: 'Profile', icon: 'paw', match: /^\/pet\/profile/ },
+  { href: '/pet/profile', label: 'Profile', icon: 'paw', match: /^\/(pet\/profile|account)/ },
 ];
 
 // Screens are loaded on demand so each page only downloads the code it needs.
-const load = { home: () => import('./screens/home.js'), wizard: () => import('./screens/wizard.js'), pet: () => import('./screens/pet.js'), account: () => import('./screens/account.js'), growth: () => import('./screens/growth.js'), guides: () => import('./screens/guides.js'), foods: () => import('./screens/foods.js'), food: () => import('./screens/food.js'), scan: () => import('./screens/scan.js'), tools: () => import('./screens/tools.js'), toxicPage: () => import('./screens/toxic-page.js'), legal: () => import('./screens/legal.js') };
+const load = { home: () => import('./screens/home.js'), dashboard: () => import('./screens/dashboard.js'), dietScreen: () => import('./screens/dietscreen.js'), profile: () => import('./screens/profile.js'), wizard: () => import('./screens/wizard.js'), account: () => import('./screens/account.js'), growth: () => import('./screens/growth.js'), guides: () => import('./screens/guides.js'), foods: () => import('./screens/foods.js'), food: () => import('./screens/food.js'), scan: () => import('./screens/scan.js'), tools: () => import('./screens/tools.js'), toxicPage: () => import('./screens/toxic-page.js'), legal: () => import('./screens/legal.js') };
 const ROUTES = [
-  [/^\/$/, async () => (await load.home()).render()],
+  [/^\/$/, async () => (isSignedIn() ? (await load.dashboard()).render() : (await load.home()).render())],
   [/^\/new$/, async () => (await load.wizard()).render()],
   [/^\/account$/, async () => (await load.account()).render()],
-  [/^\/pet(\/(growth|profile|diet))?$/, async () => (await load.pet()).render()],
+  [/^\/pet\/diet$/, async () => (await load.dietScreen()).render()],
+  [/^\/pet\/profile$/, async () => (await load.profile()).render()],
+  [/^\/pet(\/growth)?$/, async () => (await load.dashboard()).render()],
   [/^\/growth$/, async () => (await load.growth()).render()],
   [/^\/guides$/, async () => (await load.guides()).list()],
   [/^\/guides\/([\w-]+)$/, async (m) => (await load.guides()).article({ slug: m[1] })],
@@ -59,10 +62,9 @@ function syncNav() {
 
 // Small-screen menu (hamburger): every page, grouped, plus the legal links the bottom tab bar has no room for.
 const DRAWER = [
-  { title: 'Menu', items: [['/', 'Home', 'home', '^\\/$'], ['/foods', 'Foods', 'bowl', '^\\/foods'], ['/scan', 'Scan a label', 'scan', '^\\/scan'], ['/pet', 'My pet', 'paw', '^\\/(pet|new)']] },
+  { title: 'Menu', items: [] },
   { title: 'Explore', items: [['/guides', 'Learn', 'book', '^\\/guides'], ['/growth', 'Puppy growth chart', 'chart', '^\\/growth'], ['/recipe', 'Homemade recipe checker', 'flask', '^\\/recipe'], ['/toxic', 'Can my pet eat this?', 'shield', '^\\/(toxic|can-)'], ['/tools', 'All tools', 'more', '^\\/tools$']] },
-  { title: 'Account', items: [['/account', 'Your account', 'shield', '^\\/account']] },
-  { title: 'About', items: [['/disclaimer', 'Medical & data disclaimer', 'info', '^\\/disclaimer'], ['/privacy', 'Privacy policy', 'shield', '^\\/privacy'], ['/terms', 'Terms and conditions', 'article', '^\\/terms']] },
+    { title: 'About', items: [['/disclaimer', 'Medical & data disclaimer', 'info', '^\\/disclaimer'], ['/privacy', 'Privacy policy', 'shield', '^\\/privacy'], ['/terms', 'Terms and conditions', 'article', '^\\/terms']] },
 ];
 const drawer = document.getElementById('drawer'); const menuBtn = document.getElementById('menu-btn');
 drawer.innerHTML = `<div class="drawer__backdrop" data-close></div><div class="drawer__panel" role="dialog" aria-modal="true" aria-label="Site menu">
@@ -98,14 +100,14 @@ function syncCta() {
   const out = !isSignedIn(); const pet = getPet();
   const a = document.querySelector('.topbar__cta'); if (!a) return;
   // Logged out: the main button signs up (a profile needs an account). Signed in: open the plan, or start one.
-  const cta = out ? { text: 'Sign up free', href: '/new' } : pet ? { text: `${pet.name}'s plan`, href: '/pet' } : { text: 'Create profile', href: '/new' };
-  a.textContent = cta.text; a.setAttribute('href', cta.href);
+  const cta = out ? { text: 'Sign up free', href: '/new' } : { text: 'Add your pet', href: '/new' };
+  a.textContent = cta.text; a.setAttribute('href', cta.href); a.style.display = pet ? 'none' : ''; // with a pet, the tabs are the way around
   if (out) { a.setAttribute('data-signup', ''); a.setAttribute('data-then', '/new'); } else { a.removeAttribute('data-signup'); a.removeAttribute('data-then'); }
   const d = document.querySelector('.drawer__cta');
   if (d) { d.textContent = cta.text; d.setAttribute('href', cta.href); if (out) { d.setAttribute('data-signup', ''); d.setAttribute('data-then', '/new'); } else { d.removeAttribute('data-signup'); d.removeAttribute('data-then'); } }
   // Log in for visitors; a link to the account page once signed in
   const acct = getAccount(); const lb = document.getElementById('login-btn'); const dl = document.querySelector('.drawer__login'); const who = document.querySelector('.drawer__who');
-  if (lb) { lb.textContent = acct.saved ? 'Account' : 'Log in'; if (acct.saved) lb.removeAttribute('data-login'); else lb.setAttribute('data-login', ''); }
+  if (lb) { lb.style.display = acct.saved ? 'none' : ''; lb.setAttribute('data-login', ''); }
   if (dl) dl.hidden = acct.saved;
   if (who) { who.hidden = !acct.saved; who.textContent = acct.saved ? `Signed in as ${acct.email}` : ''; }
 }
@@ -117,13 +119,18 @@ function setCurrent(path) {
 }
 
 async function resolve(path) {
-  for (const [re, fn] of ROUTES) { const m = path.match(re); if (m) return fn(m); }
+  try {
+    for (const [re, fn] of ROUTES) { const m = path.match(re); if (m) return await fn(m); }
+  } catch (e) {
+    console.error('Screen failed to load:', e);
+    return { title: 'Something went wrong', html: '<div class="page page--narrow"><h1>Something went wrong</h1><p class="muted">This page did not load. Your data is safe.</p><p><button class="btn btn--primary" type="button" onclick="location.reload()">Try again</button> <a class="btn btn--ghost" href="/">Go home</a></p></div>' };
+  }
   return { title: 'Page not found', html: '<div class="page"><h1>Page not found</h1><p class="muted">That page may have moved. Try the home page or search from Learn.</p><p><a class="btn btn--dark" href="/">Go home</a></p></div>', description: 'The page you asked for was not found on Pet Nutrition Matcher.' };
 }
 
 let showSeq = 0;
 async function show(animate = false) {
-  if (isSignedIn() && pathOf() === '/') history.replaceState({}, '', '/pet' + location.search);
+  if (isSignedIn() && /^\/pet(\/growth)?$/.test(pathOf())) history.replaceState({}, '', '/' + location.search); // Home is the pet's dashboard
   const path = pathOf();
   const seq = ++showSeq;
   const view = await resolve(path);
@@ -131,7 +138,7 @@ async function show(animate = false) {
   function rerender() { const y = window.scrollY; show(); window.scrollTo({ top: y }); }
   // First load of a prerendered page: the HTML is already on screen, so only attach behaviour.
   // Skipped when a pet is saved, because then the page shows personalised content.
-  const hydrate = !animate && app.dataset.prerendered === path && !getPet();
+  const hydrate = !animate && app.dataset.prerendered === path && !isSignedIn();
   delete app.dataset.prerendered;
   const paint = () => {
     if (!hydrate) app.innerHTML = view.html;

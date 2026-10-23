@@ -114,7 +114,7 @@ export function energyPlan(pet) {
   // A growing pet that is above the 98th percentile or at body score 7+ should be guided by a vet, not an app: no calorie target is shown.
   const bands = stage === 'growth' ? growthBands(pet) : null;
   const vetHold = stage === 'growth' && (pet.bcs >= 7 || (!!bands && percentile(pet.weightKg, monthsExact(pet.birth), bands).edge === 'above'));
-  return { stage, ideal, resting, factor, kcal, floor: 0.6 * rer(ideal), losing, method, vetHold, hideKcal: vetHold, needsVet: pet.bcs <= 3 || (losing && stage === 'growth') || vetHold };
+  return { stage, ideal, resting, factor, kcal, floor: 0.6 * rer(ideal), losing, method, vetHold, hideKcal: false, needsVet: pet.bcs <= 3 || (losing && stage === 'growth') || vetHold };
 }
 
 // First number in a cell such as "6.25 (4.5 for large-breed puppies)"; "ND" or blank gives null.
@@ -802,7 +802,8 @@ export function unitKcalOfFood(unit, f) {
   if (!f) return null;
   if (unit === 'g') return f.kcalPerKg > 0 ? f.kcalPerKg / 1000 : null;
   if (unit === 'cup') return f.kcalPerCup > 0 ? f.kcalPerCup : f.gramsPerCup > 0 && f.kcalPerKg > 0 ? (f.kcalPerKg * f.gramsPerCup) / 1000 : null;
-  if (unit === 'piece') return f.kcalPerTreat > 0 ? f.kcalPerTreat : null;
+  // one piece: a treat's own calories, or a food sold in its own unit that is not a can (nugget, patty, pouch, tub, carton)
+  if (unit === 'piece') return f.kcalPerTreat > 0 ? f.kcalPerTreat : f.kcalPerUnit > 0 && f.kcalUnit && !/can|tin/i.test(f.kcalUnit) ? f.kcalPerUnit : null;
   if (unit === 'can') return f.kcalPerUnit > 0 && /can|tin/i.test(f.kcalUnit || '') ? f.kcalPerUnit : null;
   return null;
 }
@@ -848,4 +849,16 @@ export function brandGuide(food, weightKg) {
   // The nearest band is only a fair answer when the pet is within 5% of it; a 20 kg dog must not be shown the 7 to 11 kg row.
   const gap = inside ? 0 : Math.min(Math.abs(weightKg - lo(near)), Math.abs(weightKg - hi(near))); const covers = gap <= 0.05 * weightKg;
   return { row: near, exact: !!inside, covers, side: inside ? null : weightKg > hi(near) ? 'above' : 'below', grams: near.grams_per_day_min != null ? [near.grams_per_day_min, near.grams_per_day_max ?? near.grams_per_day_min] : null, text: `${amt(near.amount_min, near.amount_max)} ${near.unit}${near.amount_max > 1 && near.unit !== 'g' ? 's' : ''} a day` };
+}
+
+// The one daily calorie goal every screen shows: the saved target's calories while a goal is running, otherwise the plan's own number.
+export function dailyTarget(pet, plan, now = new Date()) {
+  if (plan.hideKcal) return null;
+  const g = effectiveGoal(pet, now);
+  if (g && !g.expired) {
+    const kcal = g.kcalOverride != null ? Number(g.kcalOverride) : goalPlan(pet, g, now).kcal;
+    const label = plan.vetHold ? 'Approximate: confirm with your vet' : g.type === 'maintain' ? 'To keep weight steady' : `To reach ${Math.round(g.targetKg * 10) / 10} kg by ${fmtDay(g.targetDate)}`;
+    return { kcal: Math.round(kcal), label };
+  }
+  return { kcal: Math.round(plan.kcal), label: plan.vetHold ? 'Approximate: confirm with your vet' : plan.stage === 'growth' ? 'For healthy growth' : 'To keep weight steady' };
 }

@@ -1,9 +1,17 @@
 // Shared chart options for a pet, used by the Growth tab and the goal card on Foods, so both show the same thing.
-import { growthBands, ageInMonths, monthsExact, energyPlan, projectGrowth, projectTrend, dietChanges, fmtDay } from './domain.js';
+import { growthBands, ageInMonths, monthsExact, energyPlan, projectGrowth, projectTrend, dietChanges, fmtDay, percentile, ordinal, round } from './domain.js';
 
 // One flag per day the diet changed, numbered oldest first (the Diet page uses the same numbers).
 const dietMarks = (pet, at) => { const ch = dietChanges(pet.diet || []); return ch.map((c, i) => ({ n: ch.length - i, date: c.date, label: `${fmtDay(c.date)}: diet change`, ...at(c.date) })); };
 import { DOG_BREEDS } from './reference.js';
+
+// What the tip shows for one weigh-in: date, age, weight and (for growing pets) percentile.
+const ageAt = (pet, on) => { const m = Math.floor(monthsExact(pet.birth, on)); return m >= 24 ? `${Math.floor(m / 12)} yr${m % 12 ? ` ${m % 12} mo` : ''}` : `${m} mo`; };
+const tipHtml = (rows) => rows.filter(Boolean).map(([k, v]) => `<span><small>${k}</small><strong>${v}</strong></span>`).join('');
+const dotInfo = (pet, bands) => (p) => {
+  const on = p.on || new Date().toISOString().slice(0, 10); const pc = bands ? percentile(p.kg, monthsExact(pet.birth, on), bands) : null;
+  return tipHtml([['Date', fmtDay(on)], ['Age', ageAt(pet, on)], ['Weight', `${round(p.kg, 1)} kg`], pc && ['Percentile', pc.edge === 'below' ? 'under 2nd' : pc.edge === 'above' ? 'over 98th' : ordinal(pc.value)]]);
+};
 
 // Growing pets get the growth curve; fully grown pets get weight over time.
 export const chartKind = (pet) => (ageInMonths(pet.birth) > (pet.species === 'cat' ? 21 : 35) ? 'weight' : 'growth');
@@ -11,17 +19,18 @@ export const chartKind = (pet) => (ageInMonths(pet.birth) > (pet.species === 'ca
 export function growthChartOpts(pet) {
   const months = ageInMonths(pet.birth); const limit = pet.species === 'cat' ? 21 : 35;
   // each weigh-in at its real age (worked out in days, shown to people only as months), so weeks within a month spread out
-  const pts = (pet.logs || []).slice().sort((a, b) => (a.on < b.on ? -1 : 1)).map((l) => ({ m: monthsExact(pet.birth, l.on), kg: l.kg })).filter((p) => p.m <= limit);
+  const pts = (pet.logs || []).slice().sort((a, b) => (a.on < b.on ? -1 : 1))
+  .map((l) => ({ m: monthsExact(pet.birth, l.on), kg: l.kg, on: l.on })).filter((p) => p.m <= limit);
   const last = pts[pts.length - 1];
-  if (!last || Math.abs(last.kg - pet.weightKg) > 0.001) pts.push({ m: monthsExact(pet.birth), kg: pet.weightKg });
+  if (!last || Math.abs(last.kg - pet.weightKg) > 0.001) pts.push({ m: monthsExact(pet.birth), kg: pet.weightKg, on: new Date().toISOString().slice(0, 10) });
   const fullMax = pet.species === 'cat' ? 21 : 36; const zoomMax = Math.min(fullMax, Math.max(12, months + 9));
   const canZoom = zoomMax < fullMax; const zoomOn = canZoom && months < 18;
-  return { bands: growthBands(pet), projection: projectGrowth(pet), marks: dietMarks(pet, (d) => ({ m: monthsExact(pet.birth, d) })), points: pts, maxMonth: zoomOn ? zoomMax : fullMax, fullMax, zoomMax, canZoom, zoomOn, title: `${pet.name} growth chart`, label: pet.name };
+  return { bands: growthBands(pet), projection: projectGrowth(pet), marks: dietMarks(pet, (d) => ({ m: monthsExact(pet.birth, d) })), points: pts, pointInfo: dotInfo(pet, growthBands(pet)), maxMonth: zoomOn ? zoomMax : fullMax, fullMax, zoomMax, canZoom, zoomOn, title: `${pet.name} growth chart`, label: pet.name };
 }
 
 export function weightChartOpts(pet) {
   const plan = energyPlan(pet); const b = pet.species === 'dog' && pet.breed ? DOG_BREEDS.find((x) => x.name === pet.breed) : null;
   const ideal = Math.abs(plan.ideal - pet.weightKg) > 0.3 ? plan.ideal : null;
   const logs = pet.logs && pet.logs.length ? pet.logs : [{ on: new Date().toISOString().slice(0, 10), kg: pet.weightKg }];
-  return { points: logs, projection: projectTrend(pet), marks: dietMarks(pet, (d) => ({ t: new Date(`${d}T00:00:00Z`).getTime() })), idealKg: ideal, range: b ? { min: b.min, max: b.max } : null, label: pet.name, title: `${pet.name} weight over time` };
+  return { points: logs, pointInfo: dotInfo(pet, null), projection: projectTrend(pet), marks: dietMarks(pet, (d) => ({ t: new Date(`${d}T00:00:00Z`).getTime() })), idealKg: ideal, range: b ? { min: b.min, max: b.max } : null, label: pet.name, title: `${pet.name} weight over time` };
 }

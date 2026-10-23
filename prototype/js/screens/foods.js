@@ -1,4 +1,4 @@
-import { listFoods, getPet, updatePet, isSignedIn, getQuickPet, setQuickPet, setGoal, getGoalHistory } from '../store.js';
+import { getRegion, REGIONS, listFoods, getPet, updatePet, isSignedIn, getQuickPet, setQuickPet, setGoal, getGoalHistory } from '../store.js';
 import { brandGuide, weightCheck, weightLossKcal, NUTRIENTS, NUTRIENT_HELP, GOALS, goalsFor, goalPlan, goalMatch, suggestDays, per1000, energyPlan, nutrientTargets, foodFit, costPerDay, gramsPerDay, round, lifeStage, rer, ageInMonths, targetBounds, allergenHits, ALLERGENS, SIZE_CATEGORIES, breedSize, lbToKg, effectiveGoal, goalProgress, fmtDay, todayStr, addDaysStr } from '../domain.js';
 import { KCAL_NOTE, foodPic, card, badge, verdictBadge, verdictBanner, stars, button, icon, esc, pageHead, emptyState, choiceGroup, selectField, field, expNote, comboField, mountCombos, sizeBlock, bindBreedSize } from '../ui.js';
 import { toast, openSheet } from '../sheet.js';
@@ -7,6 +7,7 @@ import { treatPlan, treatFit, ingredientWarnings, TOXIC_TERMS, supplementFits, s
 import { openAddItem } from '../diet.js';
 import { notice, rootOn } from '../ui.js';
 import { bindQuickWeight } from '../quickweight.js';
+import { bindFields } from '../components/petfields.js';
 import { chartKind } from '../petcharts.js';
 import { targetPickerHtml, mountTargetPicker } from '../targetpicker.js';
 import { DOG_BREEDS } from '../reference.js';
@@ -30,19 +31,20 @@ export function foodCard(food, ctx) {
     <div class="row" style="margin:var(--space-3) 0">${food.reviews ? `${stars(food.rating)}<span class="small muted">${food.rating} (${food.reviews}), ${food.rebuy}% would rebuy</span>` : '<span class="small muted">No reviews yet</span>'}</div>
     ${m?.reasons?.length ? `<ul class="reasons">${m.reasons.map((r) => `<li>${icon('check')}<span>${esc(r)}</span></li>`).join('')}</ul>` : ''}
     ${m?.targets?.length ? `<ul class="tmatch" aria-label="Compared with your numbers">${m.targets.map((t) => `<li class="tmatch--${t.state}">${icon(t.state === 'on' ? 'check' : t.state === 'na' ? 'help' : 'info')}<span>${esc(t.text)}</span></li>`).join('')}</ul>` : ''}
-    <div class="fc__stats small">${(() => {
+    <dl class="fstats">${(() => {
       // grams in the pet's daily bowl; with no pet, in a 1,000 kcal day (about a 20 kg dog), with the grams of food that is
       const ref = kcal || 1000; const grams = food.kcalPerKg ? gramsPerDay(food, ref) : null; const k = ref / 1000;
       const tail = kcal ? 'in the daily bowl' : 'in a 1,000 kcal day';
       const amt = (v) => (v == null ? 'not reported' : `<strong>${Math.round(v * k)} g</strong>`);
-      return `<div><span class="muted">Protein</span><br>${amt(p)} <span class="muted">${tail}</span></div><div><span class="muted">Fat</span><br>${amt(f)} <span class="muted">${tail}</span></div>${grams ? `<div><span class="muted">${kcal ? 'Per day' : 'That is'}</span><br><strong>${Math.round(grams)} g</strong> <span class="muted">of food</span></div>` : ''}${food.kcalPerKg ? `<div><span class="muted">Energy</span><br><strong>${Math.round(food.kcalPerKg / 10)}</strong> kcal/100 g</div>` : ''}${c ? `<div><span class="muted">Cost</span><br><strong>$${c.toFixed(2)}</strong>/day</div>` : ''}`;
-    })()}</div>
+      const row = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+      return `${row('Protein', amt(p))}${row('Fat', amt(f))}${grams ? row(kcal ? 'Food per day' : 'Food for that', `<strong>${Math.round(grams)} g</strong>`) : ''}${food.kcalPerKg ? row('Energy', `<strong>${Math.round(food.kcalPerKg / 10)}</strong> kcal/100 g`) : ''}${c ? row('Cost', `<strong>$${c.toFixed(2)}</strong>/day`) : ''}<p class="fstats__note">Protein and fat ${tail}.</p>`;
+    })()}</dl>
     ${(() => { const bg = ctx.pet ? brandGuide(food, ctx.pet.weightKg) : null;
       return bg && !bg.covers ? `<p class="small muted" style="margin:var(--space-2) 0 0">The maker's table (${esc(bg.row.weight_label)}) does not cover ${Math.round(ctx.pet.weightKg * 10) / 10} kg. Check the bag.</p>` : bg ? `<p class="small" style="margin:var(--space-2) 0 0"><span class="muted">Maker's guide for ${esc(bg.row.weight_label)}:</span> <strong>${bg.grams ? `${Math.round(bg.grams[0])}${bg.grams[1] !== bg.grams[0] ? ` to ${Math.round(bg.grams[1])}` : ''} g a day` : esc(bg.text)}</strong></p>` : ''; })()}
     ${fit && fit.warn.length ? `<p class="small" style="margin:var(--space-3) 0 0;color:var(--color-${fit.warn[0].level === 'bad' ? 'bad' : 'caution'})">${icon(fit.warn[0].level === 'bad' ? 'x' : 'alert')} ${esc(fit.warn[0].text)}</p>` : ''}
   `;
   const buy = food.buyUrl ? `<a class="fc__buy" href="${esc(food.buyUrl)}" target="_blank" rel="noopener noreferrer sponsored">${icon('cart')}<span>${food.buyType === 'search' ? 'Search at' : 'Buy at'} ${esc(food.buyRetailer || 'a retailer')}</span></a>` : '';
-  const addb = `<button type="button" class="fc__buy" ${isSignedIn() ? `data-fadd="${food.id}"` : 'data-signup data-then="/foods"'}>${icon('plus')}<span>Add to diet</span></button>`;
+  const addb = `<button type="button" class="btn btn--primary btn--small btn--block" ${isSignedIn() ? `data-fadd="${food.id}"` : 'data-signup data-then="/foods"'}>${icon('plus')}<span>${isSignedIn() ? 'Add to diet' : 'Sign up to add to diet'}</span></button>`;
   return `<div class="fcwrap">${card(inner, { href: `/food/${food.id}` })}${addb}${buy}</div>`;
 }
 
@@ -54,7 +56,7 @@ export const makeCtx = () => {
 };
 
 // ---- state ------------------------------------------------------------------------------------
-const state = { kind: 'food', xq: '', xsort: 'budget', xtype: 'all', xhide: true, xshown: 48, species: null, stage: null, include: true, sort: 'fit', quick: new Set(), priority: new Set(), unit: 'label', targets: { label: {}, kcal: {} }, targetsOpen: false, moreOpen: false, preset: null, chartOpen: false, needs: new Set(), hideAllergy: true };
+const state = { kind: 'food', xq: '', xsort: 'budget', xtype: 'all', xhide: true, xshown: 48, species: null, stage: null, include: true, sort: 'fit', quick: new Set(), priority: new Set(), unit: 'kcal', targets: { label: {}, kcal: {} }, targetsOpen: false, moreOpen: false, preset: null, chartOpen: false, needs: new Set(), hideAllergy: true };
 let goal = null; // {type, targetKg, days, kcalOverride?} for the current pet
 let goalOpen = true; // open while choosing; collapses to one line so the foods are visible
 const kcalFor = (pet) => (goal?.kcalOverride != null ? Math.max(goal.kcalOverride, goal.type === 'lose' ? Math.round(weightLossKcal(pet, goal.targetKg)) : 0) : goalPlan(pet, goal).kcal); // an old override can never go below the safe level
@@ -65,8 +67,6 @@ const QUICK = [
   { id: 'dry', label: 'Dry food', test: (f) => f.format === 'dry' },
   { id: 'wet', label: 'Wet food', test: (f) => f.format === 'wet' },
   { id: 'kcal', label: 'Calories on label', test: (f) => f.kcalPerKg != null },
-  { id: 'ca', label: 'Sold in Canada', test: (f) => (f.markets || []).includes('CA') },
-  { id: 'us', label: 'Sold in the US', test: (f) => (f.markets || []).includes('US') },
   { id: 'budget', label: 'Under $2 a day', test: (f, ctx) => { const c = costPerDay(f, ctx.goalKcal || ctx.plan?.kcal || 1000); return c != null && c <= 2; } },
 ];
 // Extras the owner can ask for. These are filters ("must contain"), matched on ingredients or the declared extras.
@@ -124,6 +124,15 @@ function bounds(T, mode, species) {
   return { lo, hi, mid: snap(vals.sort((a, b) => a - b)[Math.floor(vals.length / 2)], step), step, dec: T.dec[mode], unit: T.unit[mode] };
 }
 const clamp = (v, b) => Math.min(b.hi, Math.max(b.lo, v));
+// Numbers are stored per 1,000 kcal (how foods are compared fairly) but shown as grams a day for this pet: scale by daily calories / 1,000.
+const factorFor = (T, c) => (T.key === 'energy' ? 1 : dayFactor(c)); // calories in a food stay kcal per 100 g
+const dayFactor = (c) => { const k = c?.goalKcal || c?.plan?.kcal; return k > 0 ? k / 1000 : 1; };
+// the bounds as the owner sees them in the current reading
+function shownBounds(b, mode, F) {
+  if (mode !== 'kcal' || F === 1) return { lo: b.lo, hi: b.hi, step: b.step, dec: b.dec, unit: b.unit, F: 1 };
+  const r = (v) => Math.round(v * F * 10) / 10;
+  return { lo: r(b.lo), hi: r(b.hi), step: b.step >= 1 ? 1 : 0.1, dec: 1, unit: 'g a day', F };
+}
 const activeTargets = () => Object.entries(state.targets[state.unit]).filter(([, o]) => o && o.v != null);
 const OPS = [['about', 'About'], ['min', 'At least'], ['max', 'At most']];
 const OP_WORD = { about: 'you want', min: 'at least', max: 'at most' };
@@ -172,6 +181,24 @@ function applyPreset(id, species) {
   });
 }
 
+// The recommended intake (AAFCO, per 1000 kcal, for this pet's life stage) shown next to each number, in the unit being read.
+// On the bag the same amount reads as a percentage that depends on how energy-dense the food is, so dry and wet are both shown.
+const DRY_KCAL_KG = 3700; const WET_KCAL_KG = 1000;
+function recLine(T, ctx, mode, b) {
+  if (T.key === 'energy') return '';
+  const r = T.aafco && ctx.targets?.[T.aafco]; const name = ctx.pet ? esc(ctx.pet.name) : 'your pet';
+  if (!r || (r.min == null && r.max == null)) return `<div class="trow__rec muted small">No official target for ${T.label.toLowerCase()}: a wide range is normal.</div>`;
+  const pct = (g) => Math.round(g * 10) / 10;
+  // AAFCO states amounts per 1,000 kcal; an owner needs grams a day, so scale by the pet's daily calories
+  const kcalDay = ctx.goalKcal || ctx.plan?.kcal; const perDay = (v) => (kcalDay ? Math.round((v * kcalDay) / 100) / 10 : null); const fmt = (v) => (Number.isInteger(v) ? v : v.toFixed(1));
+  const day = (v) => (perDay(v) != null ? `<strong>${fmt(perDay(v))} g</strong> a day` : `<strong>${v} g</strong> per 1,000 kcal`);
+  const parts = [r.min != null ? `at least ${day(r.min)}` : '', r.max != null ? `at most ${day(r.max)}` : ''].filter(Boolean).join(', ');
+  const basis = kcalDay ? ` (at ${Math.round(kcalDay).toLocaleString('en-US')} kcal a day; ${r.min ?? r.max} g per 1,000 kcal, AAFCO)` : ' (AAFCO)';
+  const asBag = mode === 'label' && r.min != null ? ` On the bag that is about <strong>${pct((r.min * DRY_KCAL_KG) / 10000)}%</strong> in a dry food or <strong>${pct((r.min * WET_KCAL_KG) / 10000)}%</strong> in a wet one.` : '';
+  const use = r.min != null ? `<button type="button" class="btn btn--ghost btn--small" data-userec="${T.key}">Use this as the minimum</button>` : '';
+  return `<div class="trow__rec small">Recommended for ${name}: ${parts}${basis}.${asBag} ${use}</div>`;
+}
+
 function targetsHtml(ctx, species) {
   const mode = state.unit; const pet = ctx.pet; const rec = recommendedPreset(pet);
   const preset = PRESETS.find((p) => p.id === state.preset);
@@ -186,17 +213,19 @@ function targetsHtml(ctx, species) {
   })() : '';
   const rows = TG.filter((T) => tgGet(T, mode)).map((T) => {
     const b = bounds(T, mode, species); if (!b) return '';
-    const o = state.targets[mode][T.key]; const on = !!o; const val = on ? o.v : b.mid; const op = on ? o.op : 'about';
-    const need = (mode === 'kcal' && T.aafco && ctx.targets?.[T.aafco]?.min != null) ? `${esc(ctx.pet.name)} needs at least ${ctx.targets[T.aafco].min}.` : '';
+    const sb = shownBounds(b, mode, factorFor(T, ctx));
+    const o = state.targets[mode][T.key]; const on = !!o; const val = Math.round((on ? o.v : b.mid) * sb.F * 10) / 10; const op = on ? o.op : 'about';
+    const need = '';
     return `<div class="trow ${on ? '' : 'is-off'}" data-tkey="${T.key}"><div class="trow__head"><label class="switch"><input type="checkbox" class="tuse" ${on ? 'checked' : ''}><span class="switch__ui" aria-hidden="true"></span><strong>${T.label}</strong></label><span class="hint">${NUTRIENT_HELP[T.key === 'energy' ? 'kcal' : T.key] || ''} ${need}</span></div>
-      <div class="trow__ctl"><input type="range" aria-label="${T.label} slider" min="${b.lo}" max="${b.hi}" step="${b.step}" value="${val}" ${on ? '' : 'disabled'} data-trange><input class="input num" type="number" inputmode="decimal" aria-label="${T.label} target" min="${b.lo}" max="${b.hi}" step="${b.step}" value="${val}" ${on ? '' : 'disabled'} data-tnum><span class="unit">${b.unit}</span></div>
+      <div class="trow__ctl"><input type="range" aria-label="${T.label} slider" min="${sb.lo}" max="${sb.hi}" step="${sb.step}" value="${val}" ${on ? '' : 'disabled'} data-trange><input class="input num" type="number" inputmode="decimal" aria-label="${T.label} target" min="${sb.lo}" max="${sb.hi}" step="${sb.step}" value="${val}" ${on ? '' : 'disabled'} data-tnum><span class="unit">${sb.unit}</span></div>
       <div class="seg seg--3" role="radiogroup" aria-label="${T.label} rule">${OPS.map(([v, l]) => `<label><input type="radio" name="op-${T.key}" value="${v}" ${op === v ? 'checked' : ''} ${on ? '' : 'disabled'}><span>${l}</span></label>`).join('')}</div>
-      <div class="hint" data-thint>${on ? `Allowed range ${b.lo} to ${b.hi}. ${OP_WORD[op][0].toUpperCase() + OP_WORD[op].slice(1)} ${(+val).toFixed(b.dec)}: closest foods come first.` : 'Off. Switch on to aim for a number.'}</div></div>`;
+      ${recLine(T, ctx, mode, b)}
+      <div class="hint" data-thint>${on ? `Allowed range ${sb.lo} to ${sb.hi}. ${OP_WORD[op][0].toUpperCase() + OP_WORD[op].slice(1)} ${(+val).toFixed(sb.dec)} ${sb.unit}: closest foods come first.` : 'Off. Switch on to aim for a number.'}</div></div>`;
   }).join('');
-  return `<div class="stack"><p class="hint" style="margin:0">For owners following a vet's numbers or a diet plan. Foods closest to your numbers come first. Every number is limited to a sensible range, and every food shown already meets your pet's needs.</p>
+  return `<div class="stack"><p class="hint" style="margin:0">For owners following a vet's numbers or a diet plan. Foods closest to your numbers come first. Every number is limited to a sensible range. Foods that fit your pet come first; a food that does not fit is still listed, lower down, with a label saying why.</p>
     ${presets}
-    <div class="field"><span class="legend" id="unit-l">Read numbers as</span><div class="seg seg--2" role="radiogroup" aria-labelledby="unit-l">${[['label', '% on the label'], ['kcal', 'Per 1000 kcal']].map(([v, l]) => `<label><input type="radio" name="tunit" value="${v}" ${mode === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
-      <span class="hint">${mode === 'label' ? 'The percentages printed on the bag (as fed).' : 'A fair way to compare wet and dry foods on the same calories.'}</span></div>
+    <div class="field"><span class="legend" id="unit-l">Show nutrients as</span><div class="seg seg--2" role="radiogroup" aria-labelledby="unit-l">${[['kcal', dayFactor(ctx) !== 1 ? 'Grams a day' : 'Per 1000 kcal'], ['label', '% on the label']].map(([v, l]) => `<label><input type="radio" name="tunit" value="${v}" ${mode === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+      <span class="hint">${mode === 'label' ? 'The percentages printed on the bag (as fed).' : (dayFactor(ctx) !== 1 ? 'How many grams of each nutrient they get in a day, at their calories. Fair for wet and dry foods alike.' : 'A fair way to compare wet and dry foods on the same calories.')}</span></div>
     ${calories}${rows}<button class="btn btn--ghost" type="button" id="tclear">Clear my numbers</button></div>`;
 }
 
@@ -298,6 +327,7 @@ const PAGE = 12; let shown = PAGE; // results are shown a page at a time so a ph
 function results(ctx) {
   const species = state.species || ctx.pet?.species || 'dog';
   let foods = listFoods().filter((f) => f.species === species && (state.stage !== 'growth' || ['growth', 'all'].includes(f.lifeStage)));
+  const region = getRegion(); if (region !== 'all') foods = foods.filter((f) => (f.markets || []).includes(region)); // the profile's region: only foods sold there
   foods = foods.filter((f) => [...state.quick].every((id) => QUICK.find((q) => q.id === id).test(f, ctx)));
   if (ctx.pet && state.hideAllergy) foods = foods.filter((f) => !allergenHits(f, ctx.pet).length);
   foods = foods.filter((f) => [...state.needs].every((id) => NEEDS.find((n) => n.id === id).test(f)));
@@ -342,7 +372,7 @@ function syncMoreBadge() {
 }
 const hasPrices = () => listFoods().some((x) => x.pricePerKg);
 const chipsHtml = (pet, ctx, species) => {
-  const moreOpen = state.moreOpen || state.needs.size > 0 || state.targetsOpen;
+  const moreOpen = state.moreOpen !== false || state.needs.size > 0 || state.targetsOpen; // open until the owner closes it, so the special needs and own numbers are in view
   const active = state.needs.size + (state.targetsOpen && activeTargets().length ? 1 : 0);
   return `<section aria-labelledby="pri-h" class="prio"><div class="row row--between"><h2 id="pri-h" class="item-title" style="margin:0">What matters most?</h2><span class="small muted" id="pri-count" aria-live="polite">${state.priority.size} of ${MAX_PRIORITIES} chosen</span></div>
   <div class="chips" role="group" aria-label="Priorities" style="margin-top:var(--space-2)">${PRIORITIES.filter((p) => p.id !== 'cost' || hasPrices()).map((p) => `<button type="button" class="chipbtn chipbtn--toggle" data-pri="${p.id}" aria-pressed="${state.priority.has(p.id)}">${p.label}</button>`).join('')}</div>
@@ -478,7 +508,8 @@ export function render() {
   state.targetsOpen = state.targetsOpen || activeTargets().length > 0 || goal?.kcalOverride != null;
   return {
     title: 'Dog & Cat Food Compared by Fit and Cost per Day',
-    html: `${pageHead('Find their food')}<div class="page">${expNote()}
+    html: `${pageHead('Find their food')}<div class="page">${expNote(' Food data can be wrong or out of date: check the label on the bag.')}
+      <p class="regionbar">${icon('shield')}<span>Showing foods sold in <strong>${esc((REGIONS.find(([id]) => id === getRegion()) || [])[1] || '')}</strong>.</span> <button class="linkbtn" type="button" data-field="region">Change</button></p>
       <div class="row" style="margin-bottom:var(--space-4)" role="group" aria-label="What are you looking for">${KINDS.map(([v, l]) => `<button type="button" class="chipbtn chipbtn--toggle" data-kind-tab="${v}" aria-pressed="${state.kind === v}">${l}</button>`).join('')}</div>
       <div id="foodview" ${state.kind === 'food' ? '' : 'hidden'}>
       <div id="goalbox" style="margin-bottom:var(--space-4)">${goalBox(ctx)}</div>
@@ -498,6 +529,7 @@ export function render() {
       </div></div>
       <div id="extraview" ${state.kind === 'food' ? 'hidden' : ''}>${extraHtml(ctx)}</div></div>`,
     mount(root, rerender) {
+      bindFields(root, rerender);
       mountCombos(root);
       // Foods / Treats / Supplements: the food view is not re-rendered, it is only hidden
       const extraOut = () => { const x = root.querySelector('#xres'); if (x) x.innerHTML = extraResults(makeCtx()); };
@@ -600,7 +632,7 @@ export function render() {
 
       // your own numbers (event delegation so the panel can redraw freely)
       const tbody = root.querySelector('#targets-body');
-      const hint = (row, T) => { const o = state.targets[state.unit][T.key]; const b = bounds(T, state.unit, species$()); if (o) row.querySelector('[data-thint]').textContent = `Allowed range ${b.lo} to ${b.hi}. ${OP_WORD[o.op][0].toUpperCase() + OP_WORD[o.op].slice(1)} ${(+o.v).toFixed(b.dec)}: closest foods come first.`; };
+      const hint = (row, T) => { const o = state.targets[state.unit][T.key]; const b = bounds(T, state.unit, species$()); const sb = shownBounds(b, state.unit, factorFor(T, withKcal(makeCtx()))); if (o) row.querySelector('[data-thint]').textContent = `Allowed range ${sb.lo} to ${sb.hi}. ${OP_WORD[o.op][0].toUpperCase() + OP_WORD[o.op].slice(1)} ${(o.v * sb.F).toFixed(sb.dec)} ${sb.unit}: closest foods come first.`; };
       const usePreset = (id) => { applyPreset(id, species$()); root.querySelector('#more-opts').open = true; root.querySelector('#targets').open = true; drawTargets(); upd(); toast('Suggested numbers applied. Change any you like.'); };
       root.querySelector('#targets').addEventListener('toggle', (e) => { state.targetsOpen = e.target.open; });
       root.querySelector('#more-opts').addEventListener('toggle', (e) => { if (e.target.id === 'more-opts') state.moreOpen = e.target.open; });
@@ -617,9 +649,9 @@ export function render() {
           drawTargets(); upd(); return;
         }
         if (t.matches('[data-tnum]') && row) { // clamp on commit, say so
-          const T = TG.find((x) => x.key === row.dataset.tkey); const b = bounds(T, state.unit, species$()); let v = parseFloat(t.value);
-          if (!Number.isFinite(v)) v = b.mid; const c = clamp(v, b); if (c !== v) toast(`Kept within ${b.lo} to ${b.hi}`);
-          state.targets[state.unit][T.key].v = snap(c, b.step); drawTargets(); upd(); return;
+          const T = TG.find((x) => x.key === row.dataset.tkey); const b = bounds(T, state.unit, species$()); const F = shownBounds(b, state.unit, factorFor(T, withKcal(makeCtx()))).F; let v = parseFloat(t.value) / F; // typed in the shown unit, kept per 1,000 kcal
+          if (!Number.isFinite(v)) v = b.mid; const c = clamp(v, b); if (c !== v) { const sb = shownBounds(b, state.unit, F); toast(`Kept within ${sb.lo} to ${sb.hi}`); }
+          state.targets[state.unit][T.key].v = F !== 1 ? Math.round(c * 100) / 100 : snap(c, b.step); drawTargets(); upd(); return; // grams a day keep what was typed
         }
         if (t.matches('[data-kcal-num]')) {
           const c = makeCtx(); const kb = kcalBounds(c.pet, goal); let v = parseFloat(t.value); if (!Number.isFinite(v)) v = goalPlan(c.pet, goal).kcal;
@@ -627,11 +659,17 @@ export function render() {
           goal.kcalOverride = k; save(); drawTargets(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd();
         }
       });
+      tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-userec]'); if (!btn) return;
+        const T = TG.find((x) => x.key === btn.dataset.userec); const c = makeCtx(); const min = c.targets?.[T.aafco]?.min; if (min == null) return;
+        state.unit = 'kcal'; state.preset = null; const b = bounds(T, 'kcal', species$());
+        state.targets.kcal[T.key] = { v: clamp(snap(min, b.step), b), op: 'min' }; drawTargets(); upd(); toast(`Minimum set to ${min} g per 1,000 kcal`);
+      });
       tbody.addEventListener('input', (e) => {
         const t = e.target; const row = t.closest('[data-tkey]');
         if (t.matches('[data-trange]') && row) { // slider is always in bounds
           const T = TG.find((x) => x.key === row.dataset.tkey); row.querySelector('[data-tnum]').value = t.value;
-          state.targets[state.unit][T.key].v = parseFloat(t.value); hint(row, T); upd();
+          state.targets[state.unit][T.key].v = parseFloat(t.value) / shownBounds(bounds(T, state.unit, species$()), state.unit, factorFor(T, withKcal(makeCtx()))).F; hint(row, T); upd();
         } else if (t.matches('[data-kcal-range]')) {
           document.querySelector('#kcal-in').value = t.value; goal.kcalOverride = Math.round(+t.value); save(); root.querySelector('#goalsum') && (root.querySelector('#goalsum').innerHTML = summary(withKcal(makeCtx()))); upd();
         }

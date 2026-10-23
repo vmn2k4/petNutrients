@@ -1,6 +1,6 @@
 // APP SHELL: History API path router + navigation. Screens live in js/screens and return { title, html, mount, description? }.
 import { icon } from './ui.js';
-import { getPet, getAccount, isSignedIn } from './store.js';
+import { getPet, getAccount, isSignedIn, signOut } from './store.js';
 import { runCounters } from './motion.js';
 import { initAccountUi } from './account.js';
 import { applySeo, pathOf, SITE } from './seo.js';
@@ -105,8 +105,8 @@ function syncCta() {
   if (d) { d.textContent = cta.text; d.setAttribute('href', cta.href); if (out) { d.setAttribute('data-signup', ''); d.setAttribute('data-then', '/new'); } else { d.removeAttribute('data-signup'); d.removeAttribute('data-then'); } }
   // Log in for visitors; a link to the account page once signed in
   const acct = getAccount(); const lb = document.getElementById('login-btn'); const dl = document.querySelector('.drawer__login'); const who = document.querySelector('.drawer__who');
-  if (lb) { lb.style.display = acct.saved ? 'none' : ''; lb.setAttribute('data-login', ''); }
-  if (dl) dl.hidden = acct.saved;
+  if (lb) { lb.textContent = acct.saved ? 'Sign out' : 'Log in'; lb.setAttribute('href', acct.saved ? '#' : '/account'); if (acct.saved) { lb.removeAttribute('data-login'); lb.setAttribute('data-signout', ''); } else { lb.setAttribute('data-login', ''); lb.removeAttribute('data-signout'); } }
+  if (dl) { dl.textContent = acct.saved ? 'Sign out' : 'Log in'; dl.setAttribute('href', acct.saved ? '#' : '/account'); if (acct.saved) { dl.removeAttribute('data-login'); dl.setAttribute('data-signout', ''); } else { dl.setAttribute('data-login', ''); dl.removeAttribute('data-signout'); } }
   if (who) { who.hidden = !acct.saved; who.textContent = acct.saved ? `Signed in as ${acct.email}` : ''; }
 }
 
@@ -166,6 +166,13 @@ function navigate(url, { replace = false, animate = true } = {}) {
   app.focus({ preventScroll: true });
   show(animate);
 }
+
+// Sign out from the top bar or the phone menu: end the session, then go to the public Home.
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-signout]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation(); b.setAttribute('aria-disabled', 'true');
+  await signOut(); location.assign('/');
+}, true);
 
 // Intercept same-origin left-clicks on <a href="/..."> so SPA navigation keeps working.
 document.addEventListener('click', (e) => {

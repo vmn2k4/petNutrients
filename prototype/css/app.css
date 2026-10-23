@@ -159,3 +159,12 @@ a.card:has(.fc__img) .fstats { grid-column: 1 / -1; }
 .dietgoal__goal { display: grid; text-align: right; min-width: 0; }
 .dietgoal > div:first-child { display: grid; min-width: 0; }
 .trow__rec { margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); background: var(--color-primary-soft); border-radius: var(--radius-md); }
+
+@media (min-width: 760px) { .tools3 { grid-template-columns: repeat(2, 1fr); } }
+.expnote a, .linkbtn { min-width: var(--touch-min); justify-content: center; }
+
+/* audit fixes: nav text contrast, and the compact chips and summaries meet the 44px target */
+.navlink { color: var(--color-fg); }
+.prio .chipbtn, .narrow .chipbtn, .goalcard .disclosure > summary { min-height: var(--touch-min); }
+
+.gbtn { display: flex; align-items: center; justify-content: center; gap: var(--space-3); }

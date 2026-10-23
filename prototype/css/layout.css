@@ -32,7 +32,7 @@ img { max-width: 100%; display: block; }
 .page-head h1 { font-size: clamp(2.25rem, 4vw + 0.5rem, 3.5rem); }
 .page-head p { font-size: var(--text-lg); }
 
-.tabbar { position: fixed; inset: auto var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom)) var(--space-4); z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr); background: color-mix(in srgb, var(--color-surface) 88%, transparent); backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%); border: 1px solid var(--color-border); border-radius: var(--radius-pill); box-shadow: var(--shadow-md); padding: var(--space-1); }
+.tabbar { position: fixed; inset: auto var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom)) var(--space-4); z-index: 30; display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); background: color-mix(in srgb, var(--color-surface) 88%, transparent); backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%); border: 1px solid var(--color-border); border-radius: var(--radius-pill); box-shadow: var(--shadow-md); padding: var(--space-1); }
 
 .stack > * + * { margin-top: var(--space-5); }
 .stack-lg > * + * { margin-top: var(--space-7); }

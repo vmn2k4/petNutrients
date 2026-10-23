@@ -8,8 +8,8 @@ export const GUIDES = [
   "art": "cut-beagle",
   "summary": "Five parts of the bag that tell you what is really inside, and what the marketing leaves out.",
   "cta": {
-   "label": "Scan a label",
-   "href": "/scan"
+   "label": "Find food",
+   "href": "/foods"
   },
   "blocks": [
    [
@@ -86,7 +86,7 @@ export const GUIDES = [
    ],
    [
     "note",
-    "Scan the back of a bag with our label scanner and we show the numbers per 1000 calories, so every food is on the same footing."
+    "Our food finder shows the numbers per 1000 calories, so every food is on the same footing."
    ],
    [
     "src",

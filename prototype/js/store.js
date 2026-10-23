@@ -45,6 +45,8 @@ const RECOVERY_KEY = 'pnm.recovery';
     }
   } catch { /* no auth redirect in the URL */ }
 })();
+// "Continue with Google": Supabase sends the owner to Google and back here with the session in the URL, which takeAuthRedirect above reads.
+export const googleSignInUrl = () => `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(location.origin)}`;
 export const takeRecovery = () => { try { const m = sessionStorage.getItem(RECOVERY_KEY); sessionStorage.removeItem(RECOVERY_KEY); return !!m && !!session; } catch { return false; } };
 export const takeAuthNotice = () => { try { const m = sessionStorage.getItem(NOTICE_KEY); sessionStorage.removeItem(NOTICE_KEY); return m; } catch { return null; } };
 let online = false;

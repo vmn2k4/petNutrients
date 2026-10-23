@@ -10,14 +10,12 @@ import { applySeo, pathOf, SITE } from './seo.js';
 const NAV_OUT = [
   { href: '/', label: 'Home', icon: 'home', match: /^\/$/ },
   { href: '/growth', label: 'Growth chart', icon: 'chart', match: /^\/growth/ },
-  { href: '/scan', label: 'Scan', icon: 'scan', match: /^\/scan/, primary: true },
   { href: '/foods', label: 'Find food', icon: 'bowl', match: /^\/foods/ },
   { href: '/guides', label: 'Guides', icon: 'book', match: /^\/(guides|tools|recipe|toxic|can-)/ },
 ];
 const NAV_IN = [
   { href: '/', label: 'Home', icon: 'home', match: /^\/$/ },
   { href: '/pet/diet', label: 'Diet', icon: 'leaf', match: /^\/pet\/diet/ },
-  { href: '/scan', label: 'Scan', icon: 'scan', match: /^\/scan/, primary: true }, // third of five, so the raised button sits in the middle of the bar
   { href: '/foods', label: 'Find food', icon: 'bowl', match: /^\/foods/ },
   { href: '/pet/profile', label: 'Profile', icon: 'paw', match: /^\/(pet\/profile|account)/ },
 ];
@@ -36,7 +34,7 @@ const ROUTES = [
   [/^\/guides\/([\w-]+)$/, async (m) => (await load.guides()).article({ slug: m[1] })],
   [/^\/foods$/, async () => (await load.foods()).render()],
   [/^\/food\/(\w+)$/, async (m) => (await load.food()).render({ id: m[1] })],
-  [/^\/scan$/, async () => (await load.scan()).render()],
+  [/^\/scan$/, async () => ({ title: 'Label scanner: coming soon', html: '<div class="page page--narrow"><h1>Label scanner is coming soon</h1><p class="muted">Until then, find foods and compare their numbers on the Find food page.</p><p><a class="btn btn--primary" href="/foods">Find food</a></p></div>' })],
   [/^\/tools$/, async () => (await load.tools()).hub()],
   [/^\/recipe$/, async () => (await load.tools()).recipe()],
   [/^\/toxic$/, async () => (await load.tools()).toxic()],
@@ -88,7 +86,7 @@ document.addEventListener('keydown', (e) => {
 window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => { if (e.matches && !drawer.hidden) setDrawer(false); });
 
 const footer = document.getElementById('footer');
-footer.innerHTML = `<svg class="footer__wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0,50 C180,0 360,90 540,52 C720,14 900,0 1080,40 C1260,84 1380,60 1440,42 L1440,90 L0,90 Z"/></svg><div class="footer__links"><a href="/foods">Dog and cat food finder</a><a href="/scan">Scan a label</a><a href="/guides">Nutrition guides</a><a href="/growth">Puppy growth chart</a><a href="/recipe">Homemade recipe checker</a><a href="/toxic">Can my pet eat this?</a></div><div class="footer__links footer__legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms and Conditions</a><a href="/disclaimer">Medical &amp; Data Disclaimer</a></div>
+footer.innerHTML = `<svg class="footer__wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0,50 C180,0 360,90 540,52 C720,14 900,0 1080,40 C1260,84 1380,60 1440,42 L1440,90 L0,90 Z"/></svg><div class="footer__links"><a href="/foods">Dog and cat food finder</a><a href="/guides">Nutrition guides</a><a href="/growth">Puppy growth chart</a><a href="/recipe">Homemade recipe checker</a><a href="/toxic">Can my pet eat this?</a></div><div class="footer__links footer__legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms and Conditions</a><a href="/disclaimer">Medical &amp; Data Disclaimer</a></div>
   <p style="margin:0 0 var(--space-2);max-width:60ch">Made with love for dogs, cats and the people who feed them. Free to use, for pet owners everywhere.</p>
   <p style="margin:0;max-width:60ch">General guidance, not veterinary advice. Always ask your vet about health concerns. Growth data: Salt et al. 2017 (CC BY 4.0). Toxicity data: ASPCA Animal Poison Control and BioVet (CC BY 4.0). Product data: Open Pet Food Facts (ODbL). Nutrient profiles: AAFCO. Breed conditions: canine diet datasets on figshare (CC BY 4.0). Breed exercise: Kaggle dog breeds dataset (CC0).</p>`;
 

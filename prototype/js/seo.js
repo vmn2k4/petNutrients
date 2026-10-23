@@ -1,6 +1,6 @@
 // SITE CONFIG: one place to set the public domain for canonical, OG, sitemap and JSON-LD.
 // TODO: replace with the real production domain before launch.
-export const SITE = 'https://example.com';
+export const SITE = 'https://munaruna.com';
 
 export const DEFAULT_DESC = "Build your dog or cat's profile and get foods that fit their age, weight, allergies and goals, with AAFCO checks and cost per day. Free.";
 export const DEFAULT_TITLE = 'Free Dog & Cat Food Matcher – Find the Right Food for Your Pet';
@@ -14,14 +14,14 @@ export const SEO_BY_PATH = [
   [/^\/new\/?$/, { title: 'Dog & Cat Food Finder – Match by Breed, Age & Weight', desc: 'Answer 3 quick questions about your dog or cat and get food matches for their age, size, weight and needs. Free, no account needed.' }],
   [/^\/foods\/?$/, { title: 'Dog & Cat Food Compared by Fit and Cost per Day', desc: 'Dog and cat foods ranked by fit for your pet, AAFCO nutrient checks and cost per day. Filter by goal, allergies, format and extras.' }],
   [/^\/food\//, { title: null, desc: 'See what is in this pet food per 1000 kcal, how it compares with AAFCO targets, daily portions, and what other owners say.' }],
-  [/^\/scan\/?$/, { title: 'Free Pet Food Label Scanner – Check Nutrients & AAFCO', desc: 'Snap a dog or cat food label or enter the barcode. We check protein, fat, calcium and phosphorus against AAFCO targets for your pet. Free.' }],
+  [/^\/scan\/?$/, { title: 'Label scanner: coming soon', desc: 'The pet food label scanner is not ready yet. Use the food finder to compare foods.' }],
   [/^\/toxic\/?$/, { title: 'Can My Dog or Cat Eat This? Toxic Food Checker (Free)', desc: 'Type a food to see if it is safe, risky or toxic for dogs and cats before you share a snack. Can dogs eat grapes? Check here. Not vet advice.' }],
   [/^\/can-dogs-eat\//, { title: null, desc: null }],
   [/^\/can-cats-eat\//, { title: null, desc: null }],
   [/^\/recipe\/?$/, { title: 'Homemade Pet Food Mix Builder – Calories & AAFCO Gaps', desc: 'Cooking for your dog or cat? Mix real ingredients (USDA data) by percent or grams, see calories per 100 g, and check protein, fat, calcium and phosphorus against AAFCO targets.' }],
   [/^\/guides\/puppy-growth-chart\/?$/, { title: 'Puppy Growth Chart: How Big Will My Puppy Get?', desc: "Use a puppy growth chart to see your dog's weight percentile, estimate how big your puppy will get, and find daily calories for a safe goal. Kittens too." }],
   [/^\/guides\/?$/, { title: 'Dog & Cat Nutrition Guides – Labels, AAFCO, Feeding', desc: 'Plain-English guides to reading pet food labels, AAFCO profiles, puppy and kitten growth, healthy weight and home-cooked food.' }],
-  [/^\/tools\/?$/, { title: 'Free Pet Nutrition Tools – Scanner, Growth, Toxic Foods', desc: 'Free pet nutrition tools: food label scanner, homemade recipe checker, growth chart goal planner and toxic food checker for dogs and cats.' }],
+  [/^\/tools\/?$/, { title: 'Free Pet Nutrition Tools – Growth Chart, Recipe Checker, Toxic Foods', desc: 'Free pet nutrition tools: homemade recipe checker, growth chart goal planner and toxic food checker for dogs and cats.' }],
   [/^\/growth\/?$/, { title: 'Puppy & Kitten Growth Chart + Adult Weight Calculator', desc: "Track your puppy's or kitten's weight by week and see if they're on curve. Estimates adult size for purebred and mixed-breed puppies. Free." }],
   [/^\/privacy\/?$/, { title: 'Privacy Policy – Pet Nutrition Matcher', desc: 'What Pet Nutrition Matcher collects (pet profiles, weigh-ins, reviews), why, who processes it, your rights under PIPEDA, GDPR and CCPA, and how to delete your data.' }],
   [/^\/terms\/?$/, { title: 'Terms and Conditions – Pet Nutrition Matcher', desc: 'Terms for using Pet Nutrition Matcher: general information only, not veterinary advice, user reviews, no warranties, liability limits and BC governing law.' }],

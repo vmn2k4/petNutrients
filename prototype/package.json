@@ -5,7 +5,7 @@
   "scripts": {
     "start": "python3 scripts/serve_spa.py",
     "build": "node scripts/prerender.mjs",
-    "build:prod": "SITE_URL=https://example.com node scripts/prerender.mjs",
+    "build:prod": "SITE_URL=https://munaruna.com node scripts/prerender.mjs",
     "vercel-build": "node scripts/check-config.mjs && node scripts/prerender.mjs && node scripts/vercel-output.mjs"
   },
   "devDependencies": {

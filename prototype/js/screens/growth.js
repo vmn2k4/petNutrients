@@ -28,7 +28,7 @@ function formHtml(q) {
 function nudgesHtml(pet) {
   const plan = energyPlan(pet);
   const kcal = plan.hideKcal ? `<p class="muted" style="margin:0">Please ask your vet how much to feed.</p>`
-    : showKcal ? `<div class="kcal-reveal"><strong class="kcal-hero">${Math.round(plan.kcal)}</strong> <span class="muted">kcal a day, about</span><p class="hint" style="margin:var(--space-2) 0 0">Approximate, from age and weight. Please confirm with your vet.</p></div>`
+    : showKcal ? `<div class="kcal-reveal"><strong class="kcal-hero">${Math.round(plan.kcal)}</strong> <span class="muted">kcal a day</span><p class="hint" style="margin:var(--space-2) 0 0">Approximate, from age and weight. Please confirm with your vet.</p></div>`
       : button({ label: 'Show daily calories', variant: 'secondary', iconName: 'arrow', attrs: 'data-kcal' });
   return `<div class="grid grid--2 nudges">
     ${card(`<h2>How much to feed?</h2>${kcal}`)}

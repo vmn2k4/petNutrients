@@ -22,7 +22,7 @@ Habit-forming means helpful and easy to return to, not manipulative.
 - Rhythm, not pressure: weigh-in streaks are on a schedule (2 weeks growing, monthly adult), can be skipped without losing the streak, and reminders are opt-in and at most weekly. Never shame, never highlight a broken streak.
 - Specific, goal-based reminder copy. No fake urgency, no countdowns.
 - Motion only where it carries meaning (numbers count up to a result, the pet's line draws in); always honor reduced motion.
-- Phone first: scanning is the in-store action, so Scan is the raised center tab; questions and filters open as bottom sheets.
+- Phone first: questions and filters open as bottom sheets. Scan (the in-store action, raised center tab) is hidden from navigation until label reading and barcode lookup really work (decided 2026-10-22); `/scan` shows a coming-soon page.
 - Evidence is thin: most engagement claims online are vendor blogs. Measure our own retention before adding more mechanics.
 
 ## Architecture (hard rules)

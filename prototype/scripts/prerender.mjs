@@ -50,7 +50,7 @@ function loadToxic() {
 }
 
 const PUBLIC = [
-  '/', '/new', '/foods', '/privacy', '/terms', '/disclaimer', '/scan', '/tools', '/recipe', '/toxic', '/growth', '/guides',
+  '/', '/new', '/foods', '/privacy', '/terms', '/disclaimer', '/tools', '/recipe', '/toxic', '/growth', '/guides',
   ...loadFoodIds().map((id) => `/food/${id}`),
   ...loadGuideSlugs().map((s) => `/guides/${s}`),
   ...loadToxic().flatMap((s) => [`/can-dogs-eat/${s}`, `/can-cats-eat/${s}`]),

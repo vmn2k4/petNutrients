@@ -349,7 +349,7 @@ function results(ctx) {
   const goalLabel = goal ? GOALS.find((g) => g.id === goal.type).label.toLowerCase() : '';
   const extra = [state.priority.size ? 'your priorities' : '', hasT ? 'your numbers' : ''].filter(Boolean).join(' and ');
   return foods.length
-    ? `<h2 class="sr-only">Results</h2><p class="muted small" aria-live="polite">${foods.length} food${foods.length === 1 ? '' : 's'}${ctx.pet ? ` for ${esc(ctx.pet.name)}${goal ? `, ranked to ${goalLabel}${extra ? ` and ${extra}` : ''}` : ''}` : ''}</p><div class="grid grid--auto">${foods.slice(0, shown).map((f) => foodCard(f, ctx)).join('')}</div>${foods.length > shown ? `<button class="btn btn--secondary btn--block" type="button" data-more>Show ${Math.min(PAGE, foods.length - shown)} more (${shown} of ${foods.length})</button>` : ''}`
+    ? `<h2 class="sr-only">Results</h2><p class="muted small" aria-live="polite">${foods.length} food${foods.length === 1 ? '' : 's'}${ctx.pet ? ` for ${esc(ctx.pet.name || 'your pet')}${goal ? `, ranked to ${goalLabel}${extra ? ` and ${extra}` : ''}` : ''}` : ''}</p><div class="grid grid--auto">${foods.slice(0, shown).map((f) => foodCard(f, ctx)).join('')}</div>${foods.length > shown ? `<button class="btn btn--secondary btn--block" type="button" data-more>Show ${Math.min(PAGE, foods.length - shown)} more (${shown} of ${foods.length})</button>` : ''}`
     : emptyState({ img: (ctx.pet?.species === 'cat' || state.species === 'cat') ? 'cut-cat' : 'cut-beagle', title: 'No foods match, yet', text: 'Try removing a filter, or turn on "include foods that do not report a nutrient" in More filters.' });
 }
 

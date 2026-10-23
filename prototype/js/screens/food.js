@@ -61,7 +61,7 @@ export function render({ id }) {
             ${food.buyUrl ? button({ label: `${food.buyType === 'search' ? 'Search for it at' : 'Buy at'} ${food.buyRetailer || 'a retailer'}`, href: food.buyUrl, variant: 'primary', iconName: 'cart', block: true, attrs: 'target="_blank" rel="noopener noreferrer sponsored"' }) : ''}
             ${isSignedIn() && pet ? button({ label: 'Add to diet', variant: 'primary', iconName: 'plus', attrs: 'id="adddiet"', block: true }) : button({ label: 'Add to diet', variant: 'primary', iconName: 'plus', attrs: `data-signup data-then="/food/${food.id}"`, block: true })}
             ${button({ label: getSaved().includes(food.id) ? 'Saved' : 'Save food', variant: 'secondary', iconName: 'heart', attrs: 'id="save"', block: true })}`)}
-          ${button({ label: 'Compare with a food you have', href: '/scan', variant: 'ghost', iconName: 'scan' })}
+          
           ${notice('Nutrition numbers come from the maker\'s label for another country, so check them against your bag. Ingredient lists may be partial.', 'caution')}
         </aside>
       </div></div>`,

@@ -2,11 +2,14 @@
 // Any element with data-signup or data-login opens the sheet (data-then="/path" says where to go afterwards).
 // initAccountUi() wires that once for the whole app.
 import { openSheet, toast } from './sheet.js';
-import { signUpWithPassword, logInWithPassword, requestPasswordReset, setNewPassword, takeRecovery, takeAuthNotice } from './store.js';
+import { googleSignInUrl, signUpWithPassword, logInWithPassword, requestPasswordReset, setNewPassword, takeRecovery, takeAuthNotice } from './store.js';
 import { esc, button, icon, card, pageBand } from './ui.js';
 
 let open = false; // a flag rather than a DOM check: quick double taps arrive before the first sheet is in the page
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Google is the only way in for now; the email and password form below is kept (switch EMAIL_AUTH on to bring it back).
+const EMAIL_AUTH = false;
+const googleBtn = (variant = 'secondary') => `<a class="btn btn--${variant} btn--block gbtn" href="${googleSignInUrl()}"><svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.5l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg><span>Continue with Google</span></a>`;
 export const PENDING_REMINDERS = 'pnm.pendingReminders';
 
 // What an account gives, in the owner's words. Shown on sign up and on the profile gate.
@@ -26,7 +29,7 @@ export function profileGate() {
     html: `${pageBand("Build your pet's plan")}<div class="page page--narrow">${card(`<h2>Create a free account to start</h2>
       <p class="muted" style="margin:var(--space-2) 0 var(--space-4)">Your profile lives in your account, so it is safe and ready on any device.</p>${benefitsList()}
       <div class="row" style="margin-top:var(--space-5)">${button({ label: 'Create free account', variant: 'primary', iconName: 'arrow', attrs: 'data-signup data-then="/new"' })}${button({ label: 'Log in', variant: 'secondary', attrs: 'data-login data-then="/pet"' })}</div>
-      <p class="hint" style="margin:var(--space-4) 0 0">Not ready? You can <a href="/foods">browse foods</a>, <a href="/scan">scan a label</a> and <a href="/guides">read the guides</a> without an account.</p>`)}</div>`,
+      <p class="hint" style="margin:var(--space-4) 0 0">Not ready? You can <a href="/foods">browse foods</a> and <a href="/guides">read the guides</a> without an account.</p>`)}</div>`,
     mount() {},
   };
 }
@@ -82,11 +85,21 @@ export function openAuthSheet(mode = 'signup', { then = null } = {}) {
         });
         pass.focus();
       }
+      function drawGoogle() {
+        const signup = mode === 'signup';
+        root.innerHTML = `${signup ? benefitsList() : '<p class="muted" style="margin:0">Log in with your Google account.</p>'}
+          ${googleBtn('primary')}
+          <div class="row" style="margin-top:var(--space-3)">${button({ label: 'Not now', variant: 'ghost', attrs: 'data-close' })}</div>
+          <p class="hint" style="margin:var(--space-3) 0 0">We only use your Google name and email to sign you in. <a href="/privacy">Privacy</a></p>`;
+      }
       function draw() {
+        if (!EMAIL_AUTH && mode !== 'reset') return drawGoogle();
         if (mode === 'forgot') return drawForgot();
         if (mode === 'reset') return drawReset();
         const signup = mode === 'signup';
-        root.innerHTML = `<form id="f-email" class="stack" novalidate>
+        root.innerHTML = `${googleBtn()}
+        <p class="small muted" style="margin:var(--space-3) 0;text-align:center">or use your email</p>
+        <form id="f-email" class="stack" novalidate>
           ${signup ? `${benefitsList()}<p class="hint" style="margin:0">Free. Takes about a minute.</p>` : '<p class="muted" style="margin:0">Log in with your email and password.</p>'}
           <div class="field"><label for="a-email">Email</label><input class="input" id="a-email" name="email" type="email" inputmode="email" autocomplete="${signup ? 'email' : 'username'}" required value="${esc(email)}" placeholder="you@example.com"></div>
           <div class="field"><label for="a-pass">Password</label><input class="input" id="a-pass" name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="8" required placeholder="${signup ? 'At least 8 characters' : 'Your password'}"></div>

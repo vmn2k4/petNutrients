@@ -41,9 +41,9 @@ export const SEO_BY_PATH = [
   [/^\/guides\/?$/, { title: 'Dog & Cat Nutrition Guides – Labels, AAFCO, Feeding', desc: 'Plain-English guides to reading pet food labels, AAFCO profiles, puppy and kitten growth, healthy weight and home-cooked food.' }],
   [/^\/tools\/?$/, { title: 'Free Pet Nutrition Tools – Calorie Calculator, Growth Chart, Recipe Checker', desc: 'Free pet nutrition tools for dogs and cats: daily calorie calculator, growth chart and weight tracker, homemade recipe checker and toxic food checker.' }],
   [/^\/growth\/?$/, { title: 'Puppy & Kitten Weight Tracker – Growth Chart & Calorie Goal', desc: "Pet weight tracker: log your puppy's or kitten's weight, see the growth percentile, estimate adult size and get a daily calorie goal. Dogs and cats. Free." }],
-  [/^\/privacy\/?$/, { title: 'Privacy Policy – Pet Nutrition Matcher', desc: 'What Pet Nutrition Matcher collects (pet profiles, weigh-ins, reviews), why, who processes it, your rights under PIPEDA, GDPR and CCPA, and how to delete your data.' }],
-  [/^\/terms\/?$/, { title: 'Terms and Conditions – Pet Nutrition Matcher', desc: 'Terms for using Pet Nutrition Matcher: general information only, not veterinary advice, user reviews, no warranties, liability limits and BC governing law.' }],
-  [/^\/disclaimer\/?$/, { title: 'Medical & Data Disclaimer – Pet Nutrition Matcher', desc: 'Our nutrition data, growth charts, calorie suggestions and food matches are experimental estimates, not veterinary advice. Check with your vet before acting.' }],
+  [/^\/privacy\/?$/, { title: 'Privacy Policy – Pet Diet & Weight Tracker', desc: 'What Pet Diet & Weight Tracker collects (pet profiles, weigh-ins, reviews), why, who processes it, your rights under PIPEDA, GDPR and CCPA, and how to delete your data.' }],
+  [/^\/terms\/?$/, { title: 'Terms and Conditions – Pet Diet & Weight Tracker', desc: 'Terms for using Pet Diet & Weight Tracker: general information only, not veterinary advice, user reviews, no warranties, liability limits and BC governing law.' }],
+  [/^\/disclaimer\/?$/, { title: 'Medical & Data Disclaimer – Pet Diet & Weight Tracker', desc: 'Our nutrition data, growth charts, calorie suggestions and food matches are experimental estimates, not veterinary advice. Check with your vet before acting.' }],
   [/^\/pet(\/|$)/, { title: null, desc: "Your pet's growth chart, daily calories and nutrient targets.", robots: 'noindex, nofollow' }],
 ];
 
@@ -66,7 +66,7 @@ function setMeta(attr, key, val) { ensureMeta(attr, key).setAttribute('content',
 export function applySeo(path, view) {
   const hit = SEO_BY_PATH.find(([re]) => re.test(path));
   const conf = hit ? hit[1] : {};
-  const title = conf.title || (view?.title?.length > 40 ? view.title : view?.title ? `${view.title} · Pet Nutrition Matcher` : DEFAULT_TITLE);
+  const title = conf.title || (view?.title?.length > 40 ? view.title : view?.title ? `${view.title} · Pet Diet & Weight Tracker` : DEFAULT_TITLE);
   const desc = conf.desc || view?.description || DEFAULT_DESC;
   const robots = conf.robots || view?.robots || (NOINDEX.some((re) => re.test(path)) ? 'noindex, nofollow' : 'index, follow, max-image-preview:large');
   const img = imageFor(path, view);

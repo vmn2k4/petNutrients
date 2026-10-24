@@ -9,7 +9,7 @@ const readUnit = () => { try { return localStorage.getItem('pnm.unit') === 'lb' 
 export function render() {
   if (!isSignedIn()) {
     return {
-      title: 'Your account', description: 'Create a free account or log in to Pet Nutrition Matcher.',
+      title: 'Your account', description: 'Create a free account or log in to Pet Diet & Weight Tracker.',
       html: `${pageBand('Your account')}<div class="page page--narrow">${card(`<h2>Create a free account</h2><p class="muted" style="margin:var(--space-2) 0 var(--space-4)">Build a profile for your pet and keep it safe on every device.</p>${benefitsList()}
         <div class="row" style="margin-top:var(--space-5)">${button({ label: 'Create free account', variant: 'primary', iconName: 'arrow', attrs: 'data-signup data-then="/new"' })}${button({ label: 'Log in', variant: 'secondary', attrs: 'data-login data-then="/pet"' })}</div>`)}</div>`,
       mount() {},
@@ -40,7 +40,7 @@ export function render() {
 
   return {
     title: 'Your account',
-    description: 'Save your plan, log in and manage your Pet Nutrition Matcher account.',
+    description: 'Save your plan, log in and manage your Pet Diet & Weight Tracker account.',
     html: `${pageBand('Your account')}<div class="page page--narrow"><div class="stack">${who}${reminders}${units}${data}</div></div>`,
     mount(root, rerender) {
       root.querySelector('#logout')?.addEventListener('click', async (e) => { e.currentTarget.disabled = true; await signOut(); toast('Logged out.'); location.assign('/'); });

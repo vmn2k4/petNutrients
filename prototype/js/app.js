@@ -66,7 +66,7 @@ const DRAWER = [
 ];
 const drawer = document.getElementById('drawer'); const menuBtn = document.getElementById('menu-btn');
 drawer.innerHTML = `<div class="drawer__backdrop" data-close></div><div class="drawer__panel" role="dialog" aria-modal="true" aria-label="Site menu">
-  <div class="drawer__head"><span class="brand"><i class="ph-fill ph-paw-print icon" aria-hidden="true"></i><span>Pet Nutrition Matcher</span></span><button class="drawer__close" type="button" data-close aria-label="Close menu"><i class="ph ph-x icon" aria-hidden="true"></i></button></div>
+  <div class="drawer__head"><span class="brand"><i class="ph-fill ph-paw-print icon" aria-hidden="true"></i><span>Pet Diet & Weight Tracker</span></span><button class="drawer__close" type="button" data-close aria-label="Close menu"><i class="ph ph-x icon" aria-hidden="true"></i></button></div>
   <a class="btn btn--primary btn--block drawer__cta" href="/new">Find their food</a>
   <a class="btn btn--secondary btn--block drawer__login" href="/account" data-login>Log in</a><p class="small muted drawer__who" hidden></p>
   ${DRAWER.map((g) => `<nav class="drawer__group" aria-label="${g.title}"><h2>${g.title}</h2>${g.items.map(([href, label, ic, re]) => `<a class="drawer__link" href="${href}" data-match="${re}">${icon(ic)}<span>${label.replace('&', '&amp;')}</span></a>`).join('')}</nav>`).join('')}</div>`;
@@ -123,7 +123,7 @@ async function resolve(path) {
     console.error('Screen failed to load:', e);
     return { title: 'Something went wrong', html: '<div class="page page--narrow"><h1>Something went wrong</h1><p class="muted">This page did not load. Your data is safe.</p><p><button class="btn btn--primary" type="button" onclick="location.reload()">Try again</button> <a class="btn btn--ghost" href="/">Go home</a></p></div>' };
   }
-  return { title: 'Page not found', html: '<div class="page"><h1>Page not found</h1><p class="muted">That page may have moved. Try the home page or search from Learn.</p><p><a class="btn btn--dark" href="/">Go home</a></p></div>', description: 'The page you asked for was not found on Pet Nutrition Matcher.', robots: 'noindex, nofollow' };
+  return { title: 'Page not found', html: '<div class="page"><h1>Page not found</h1><p class="muted">That page may have moved. Try the home page or search from Learn.</p><p><a class="btn btn--dark" href="/">Go home</a></p></div>', description: 'The page you asked for was not found on Pet Diet & Weight Tracker.', robots: 'noindex, nofollow' };
 }
 
 let showSeq = 0;

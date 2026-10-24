@@ -47,3 +47,4 @@ app.*.map.json
 # local build configuration (public keys, still not committed)
 env.json
 env.local.json
+store_assets/*.aab

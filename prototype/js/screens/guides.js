@@ -28,7 +28,7 @@ export function article({ slug }) {
   const articleLd = { '@context': 'https://schema.org', '@type': 'Article', headline: g.title, description: g.summary,
     mainEntityOfPage: absUrl(`/guides/${g.slug}`), image: absUrl(`/assets/${g.art}.webp`),
     datePublished: g.published || '2026-10-21', dateModified: g.reviewed || '2026-10-21',
-    author: { '@type': 'Organization', name: 'Pet Nutrition Matcher', url: absUrl('/') }, publisher: { '@type': 'Organization', name: 'Pet Nutrition Matcher' } };
+    author: { '@type': 'Organization', name: 'Pet Diet & Weight Tracker', url: absUrl('/') }, publisher: { '@type': 'Organization', name: 'Pet Diet & Weight Tracker' } };
   let faqLd = '';
   if (g.faq) {
     const start = g.blocks.findIndex((b) => b[0] === 'h2' && /frequently asked/i.test(b[1]));

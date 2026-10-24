@@ -32,7 +32,7 @@ class LegalScreen extends StatelessWidget {
                   const Gap(AppSpace.s2),
                   Text(doc['lead'] as String, style: context.text.bodySmall),
                   const Gap(AppSpace.s2),
-                  Text('Last updated: 21 October 2026', style: context.text.bodySmall),
+                  Text('Last updated: ${doc['updated'] ?? ''}', style: context.text.bodySmall),
                   for (final s in (doc['sections'] as List)) ..._section(context, s as List),
                   const Gap(AppSpace.s5),
                 ]),

@@ -6,13 +6,17 @@ import { breadcrumbLd, crumbsHtml } from '../seo.js';
 export const LEGAL = {
   operator: '[TODO: legal name of operator / company]',
   email: 'contact@choseno.com',
-  updated: '21 October 2026',
+  updated: '23 October 2026',
 };
 const TEMPLATE_NOTE = '<!-- Template — have a lawyer licensed in BC review before launch. -->';
 
 const section = ([h, ...paras]) => `<h2>${esc(h)}</h2>${paras.map((p) => (Array.isArray(p) ? `<ul>${p.map((x) => `<li>${x}</li>`).join('')}</ul>` : `<p>${p}</p>`)).join('')}`;
 
+/** Every page's text, recorded as it is built, so the mobile app can read exactly the same words (see scripts/export_legal.mjs). */
+export const DOCS = {};
+
 function page(path, title, lead, sections) {
+  DOCS[path] = { title, lead, updated: LEGAL.updated, sections };
   const crumbs = [{ name: 'Home', path: '/' }, { name: esc(title), path }];
   return `${TEMPLATE_NOTE}${pageBand(title, lead)}<div class="page page--narrow">${crumbsHtml(crumbs)}<script type="application/ld+json">${JSON.stringify(breadcrumbLd(crumbs))}</script>
     <p class="small muted">Last updated: ${LEGAL.updated}</p>
@@ -28,7 +32,8 @@ export function disclaimer() {
     title: 'Medical & Data Disclaimer',
     html: page('/disclaimer', 'Medical & Data Disclaimer', 'Please read this before acting on anything you see here.', [
       ['General information only, not veterinary advice', `Pet Diet & Weight Tracker is operated by ${O()}, a founder based in Vancouver, British Columbia, Canada. Everything on this website and in the app is general information. It is not veterinary advice, diagnosis or treatment, and using the service does not create a veterinarian-client-patient relationship with anyone.`],
-      ['This app is in beta', 'Pet Diet & Weight Tracker is a beta service. We always try to give the best information available, but it is still being built and tested, and it may be wrong, incomplete or change without notice. Please do not expect it to be right. To the fullest extent permitted by law, we are not responsible for decisions you make, or harm to a pet, from using it.'],
+      ['Our numbers are approximate', 'Calories, portions, nutrient amounts, growth percentiles and weight goals are approximate calculations, not exact measurements, and we cannot be sure they are right for your pet. Nutrition values on labels and in public datasets can be wrong, missing or out of date, and every pet is different. Please ask your veterinarian before you change your pet\'s diet.'],
+      ['This app is in beta', 'Pet Diet & Weight Tracker is a beta service. We try to give good information, but it is still being built and tested, and it may be wrong, incomplete or change without notice. To the fullest extent permitted by law, we are not responsible for decisions you make, or harm to a pet, from using it.'],
       ['Everything here is experimental and an estimate', 'All nutrition data, growth charts and percentiles, calorie and portion suggestions, weight goals, "can my pet eat this" answers, food matches, scores, rankings and reviews are experimental. They are estimates produced by formulas, published datasets and third-party data. They may be incomplete, inaccurate, out of date or simply wrong for your pet.'],
       ['Check before you act', 'Before you act on anything you read here, for any pet, verify it with at least one other reliable source <strong>and</strong> with your veterinarian. Always talk to your vet before you:', ['change your pet\'s diet or food,', 'start a weight-loss or weight-gain plan,', 'feed a growing puppy or kitten, or a pregnant, nursing, senior or sick pet differently,', 'give any new food, treat or supplement to a pet with a medical condition.']],
       ['Emergencies', 'If your pet may have eaten something harmful, or seems unwell, do not wait and do not rely on this site. Contact your veterinarian, an emergency animal hospital or a pet poison helpline immediately.'],

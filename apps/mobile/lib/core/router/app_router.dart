@@ -51,6 +51,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/privacy', builder: (_, __) => const LegalScreen(page: 'privacy')),
       GoRoute(path: '/terms', builder: (_, __) => const LegalScreen(page: 'terms')),
       GoRoute(path: '/disclaimer', builder: (_, __) => const LegalScreen(page: 'disclaimer')),
+      GoRoute(path: '/delete-account', builder: (_, __) => const LegalScreen(page: 'delete-account')),
       GoRoute(path: '/toxic', builder: (_, __) => const ToxicScreen()),
       GoRoute(path: '/welcome', builder: (_, __) => const SignInScreen()),
       GoRoute(path: '/onboarding', builder: (_, s) => OnboardingScreen(adding: s.uri.queryParameters['add'] == '1')),

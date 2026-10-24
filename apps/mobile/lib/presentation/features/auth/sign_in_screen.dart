@@ -15,8 +15,8 @@ import '../../widgets/sheet.dart';
 
 const _benefits = [
   (PhosphorIconsFill.chartLineUp, 'A growth chart that follows them'),
-  (PhosphorIconsFill.fire, 'Daily calories worked out for your pet'),
-  (PhosphorIconsFill.shieldCheck, 'Every food checked against their needs'),
+  (PhosphorIconsFill.fire, 'Estimated daily calories for your pet'),
+  (PhosphorIconsFill.shieldCheck, 'Foods compared with their estimated needs'),
 ];
 
 /// The only screen before an account: the app shows content after Google sign-in (the web app has the public pages).
@@ -61,7 +61,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(child: Image.asset('assets/images/cut-pair.webp', fit: BoxFit.contain, errorBuilder: (_, __, ___) => Image.asset('assets/images/cut-beagle.webp', fit: BoxFit.contain))),
                 const SizedBox(height: AppSpace.s4),
-                Text('The right food for your dog or cat', style: AppTheme.display(context.text.headlineLarge!.copyWith(color: AppColors.brandInk, fontWeight: FontWeight.w700))),
+                Text('Food that fits your dog or cat', style: AppTheme.display(context.text.headlineLarge!.copyWith(color: AppColors.brandInk, fontWeight: FontWeight.w700))),
                 const SizedBox(height: AppSpace.s3),
                 for (final (icon, t) in _benefits)
                   Padding(
@@ -74,7 +74,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 Center(
                   child: TextButton(
                     onPressed: () => launchUrl(Uri.parse('${Env.siteUrl}/privacy'), mode: LaunchMode.externalApplication),
-                    child: Text('Free. We only use your Google name and email. Privacy', textAlign: TextAlign.center, style: context.text.bodySmall!.copyWith(color: c.fg)),
+                    child: Text('Free to start. Numbers are estimates: ask your vet before changing their diet. Privacy', textAlign: TextAlign.center, style: context.text.bodySmall!.copyWith(color: c.fg)),
                   ),
                 ),
               ]),

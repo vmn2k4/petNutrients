@@ -42,6 +42,7 @@ const ROUTES = [
   [/^\/privacy$/, async () => (await load.legal()).privacy()],
   [/^\/terms$/, async () => (await load.legal()).terms()],
   [/^\/disclaimer$/, async () => (await load.legal()).disclaimer()],
+  [/^\/delete-account$/, async () => (await load.legal()).deleteAccount()],
   [/^\/can-cats-eat\/([\w-]+)$/, async (m) => (await load.toxicPage()).render({ species: 'cat', slug: m[1] })],
 ];
 
@@ -86,7 +87,7 @@ document.addEventListener('keydown', (e) => {
 window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => { if (e.matches && !drawer.hidden) setDrawer(false); });
 
 const footer = document.getElementById('footer');
-footer.innerHTML = `<svg class="footer__wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0,50 C180,0 360,90 540,52 C720,14 900,0 1080,40 C1260,84 1380,60 1440,42 L1440,90 L0,90 Z"/></svg><div class="footer__links"><a href="/foods">Dog and cat food finder</a><a href="/guides">Nutrition guides</a><a href="/growth">Puppy growth chart</a><a href="/recipe">Homemade recipe checker</a><a href="/toxic">Can my pet eat this?</a></div><div class="footer__links footer__legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms and Conditions</a><a href="/disclaimer">Medical &amp; Data Disclaimer</a></div>
+footer.innerHTML = `<svg class="footer__wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0,50 C180,0 360,90 540,52 C720,14 900,0 1080,40 C1260,84 1380,60 1440,42 L1440,90 L0,90 Z"/></svg><div class="footer__links"><a href="/foods">Dog and cat food finder</a><a href="/guides">Nutrition guides</a><a href="/growth">Puppy growth chart</a><a href="/recipe">Homemade recipe checker</a><a href="/toxic">Can my pet eat this?</a></div><div class="footer__links footer__legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms and Conditions</a><a href="/disclaimer">Medical &amp; Data Disclaimer</a><a href="/delete-account">Delete your account</a></div>
   <p style="margin:0 0 var(--space-2);max-width:60ch">Made with love for dogs, cats and the people who feed them. Free to use, for pet owners everywhere.</p>
   <p style="margin:0;max-width:60ch">General guidance, not veterinary advice. Always ask your vet about health concerns. Growth data: Salt et al. 2017 (CC BY 4.0). Toxicity data: ASPCA Animal Poison Control and BioVet (CC BY 4.0). Product data: Open Pet Food Facts (ODbL). Nutrient profiles: AAFCO. Breed conditions: canine diet datasets on figshare (CC BY 4.0). Breed exercise: Kaggle dog breeds dataset (CC0).</p>`;
 

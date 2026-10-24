@@ -50,7 +50,7 @@ function loadToxic() {
 }
 
 const PUBLIC = [
-  '/', '/new', '/foods', '/scan', '/privacy', '/terms', '/disclaimer', '/tools', '/recipe', '/toxic', '/growth', '/guides',
+  '/', '/new', '/foods', '/scan', '/privacy', '/terms', '/disclaimer', '/delete-account', '/tools', '/recipe', '/toxic', '/growth', '/guides',
   // /food/<id> pages are client-rendered and noindex (the catalogue is live data), so they are not prerendered.
   ...loadGuideSlugs().map((s) => `/guides/${s}`),
   ...loadToxic().flatMap((s) => [`/can-dogs-eat/${s}`, `/can-cats-eat/${s}`]),

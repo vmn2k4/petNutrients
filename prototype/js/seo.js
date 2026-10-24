@@ -43,6 +43,7 @@ export const SEO_BY_PATH = [
   [/^\/growth\/?$/, { title: 'Puppy & Kitten Weight Tracker – Growth Chart & Calorie Goal', desc: "Pet weight tracker: log your puppy's or kitten's weight, see the growth percentile, estimate adult size and get a daily calorie goal. Dogs and cats. Free." }],
   [/^\/privacy\/?$/, { title: 'Privacy Policy – Pet Diet & Weight Tracker', desc: 'What Pet Diet & Weight Tracker collects (pet profiles, weigh-ins, reviews), why, who processes it, your rights under PIPEDA, GDPR and CCPA, and how to delete your data.' }],
   [/^\/terms\/?$/, { title: 'Terms and Conditions – Pet Diet & Weight Tracker', desc: 'Terms for using Pet Diet & Weight Tracker: general information only, not veterinary advice, user reviews, no warranties, liability limits and BC governing law.' }],
+  [/^\/delete-account\/?$/, { title: 'Delete Your Account – Pet Diet & Weight Tracker', desc: 'How to delete your Pet Diet & Weight Tracker account and the data linked to it: in the app, on the website or by email. What is deleted and what is kept.' }],
   [/^\/disclaimer\/?$/, { title: 'Medical & Data Disclaimer – Pet Diet & Weight Tracker', desc: 'Our nutrition data, growth charts, calorie suggestions and food matches are experimental estimates, not veterinary advice. Check with your vet before acting.' }],
   [/^\/pet(\/|$)/, { title: null, desc: "Your pet's growth chart, daily calories and nutrient targets.", robots: 'noindex, nofollow' }],
 ];

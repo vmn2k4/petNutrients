@@ -40,12 +40,22 @@ class SupabaseAuthRepository implements AuthRepository {
     }
   }
 
+  @override
+  Future<void> signInWithPassword(String email, String password) async {
+    await _client.auth.signInWithPassword(email: email.trim(), password: password);
+  }
+
   Future<void> _browserSignIn() async {
     await _client.auth.signInWithOAuth(
       sb.OAuthProvider.google,
       redirectTo: kIsWeb ? null : Env.authRedirect,
       authScreenLaunchMode: sb.LaunchMode.externalApplication,
     );
+  }
+
+  @override
+  Future<void> setPassword(String password) async {
+    await _client.auth.updateUser(sb.UserAttributes(password: password));
   }
 
   @override

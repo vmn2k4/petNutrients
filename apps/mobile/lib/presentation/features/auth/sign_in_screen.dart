@@ -11,6 +11,8 @@ import '../../providers/providers.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/sheet.dart';
 
+// Password sign-in is only for accounts that already exist (the app never signs people up with a password).
+
 const _benefits = [
   (PhosphorIconsFill.chartLineUp, 'A growth chart that follows them'),
   (PhosphorIconsFill.fire, 'Daily calories worked out for your pet'),
@@ -41,6 +43,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
+  void _emailSheet() {
+    showAppSheet<void>(context, title: 'Sign in with email', builder: (_) => _EmailSignIn(onSignIn: (e, p) => ref.read(authRepoProvider).signInWithPassword(e, p)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -64,7 +70,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                 const SizedBox(height: AppSpace.s4),
                 AppButton(label: 'Continue with Google', icon: PhosphorIconsBold.googleLogo, variant: AppButtonVariant.dark, block: true, loading: busy, onPressed: _go),
-                const SizedBox(height: AppSpace.s2),
+                Center(child: TextButton(onPressed: _emailSheet, child: Text('Have a password? Sign in with email', style: context.text.bodyMedium!.copyWith(color: AppColors.brandInk, fontWeight: FontWeight.w600)))),
                 Center(
                   child: TextButton(
                     onPressed: () => launchUrl(Uri.parse('${Env.siteUrl}/privacy'), mode: LaunchMode.externalApplication),
@@ -77,5 +83,55 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Email and password for existing accounts. No sign-up here; "Forgot password" opens the website reset page.
+class _EmailSignIn extends StatefulWidget {
+  const _EmailSignIn({required this.onSignIn});
+  final Future<void> Function(String email, String password) onSignIn;
+
+  @override
+  State<_EmailSignIn> createState() => _EmailSignInState();
+}
+
+class _EmailSignInState extends State<_EmailSignIn> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_email.text.trim().isEmpty || _password.text.isEmpty) {
+      setState(() => _error = 'Enter your email and password.');
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      await widget.onSignIn(_email.text, _password.text);
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) setState(() => _error = 'That email and password did not match an account.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      FieldBlock(label: 'Email', child: TextField(controller: _email, keyboardType: TextInputType.emailAddress, autofillHints: const [AutofillHints.email], textInputAction: TextInputAction.next, autocorrect: false)),
+      FieldBlock(label: 'Password', child: TextField(controller: _password, obscureText: true, autofillHints: const [AutofillHints.password], textInputAction: TextInputAction.done, onSubmitted: (_) => _submit())),
+      ErrorText(_error),
+      AppButton(label: 'Sign in', variant: AppButtonVariant.dark, block: true, loading: _busy, onPressed: _submit),
+      TextButton(onPressed: () => launchUrl(Uri.parse('${Env.siteUrl}/account'), mode: LaunchMode.externalApplication), child: const Text('Forgot password? Reset it on the website')),
+    ]);
   }
 }

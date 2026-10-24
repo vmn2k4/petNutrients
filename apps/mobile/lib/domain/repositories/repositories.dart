@@ -18,6 +18,11 @@ abstract class AuthRepository {
 
   /// Opens the Google sign-in flow; the session arrives through [changes].
   Future<void> signInWithGoogle();
+
+  /// Email and password sign-in for an account that already exists. The app never creates accounts with a password.
+  Future<void> signInWithPassword(String email, String password);
+  /// Sets or changes the password of the signed-in account, so Google accounts can also sign in with email and password.
+  Future<void> setPassword(String password);
   Future<void> signOut();
   Future<void> deleteMyAccount();
 }

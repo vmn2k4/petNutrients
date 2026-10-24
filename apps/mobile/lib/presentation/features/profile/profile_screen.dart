@@ -63,11 +63,43 @@ class ProfileScreen extends ConsumerWidget {
       ]),
       const Gap(AppSpace.s5),
       InsetSection(title: 'Account', footer: user?.email, children: [
+        RowTile(leading: IconBubble(PhosphorIconsRegular.key), title: 'Set a password', subtitle: 'To sign in with email as well as Google', chevron: true, onTap: () => _setPassword(context, ref)),
         RowTile(leading: IconBubble(PhosphorIconsRegular.signOut), title: 'Sign out', onTap: () => ref.read(authRepoProvider).signOut()),
         if (view != null) RowTile(leading: IconBubble(PhosphorIconsRegular.trash, color: context.colors.bad, background: context.colors.badBg), title: 'Remove ${view.pet.name}', destructive: true, onTap: () => _confirm(context, 'Remove ${view.pet.name}?', 'Their weights and diet history will be deleted.', () => ref.read(petsProvider.notifier).removeActive())),
         RowTile(leading: IconBubble(PhosphorIconsRegular.userMinus, color: context.colors.bad, background: context.colors.badBg), title: 'Delete my account and data', destructive: true, onTap: () => _confirm(context, 'Delete your account?', 'Every pet, weight and diet entry is deleted. This cannot be undone.', () => ref.read(authRepoProvider).deleteMyAccount())),
       ]),
     ]);
+  }
+
+  /// New password for the signed-in account (min 8 characters, same rule as the website).
+  void _setPassword(BuildContext context, WidgetRef ref) {
+    final a = TextEditingController();
+    final b = TextEditingController();
+    showAppSheet<void>(context, title: 'Set a password', builder: (ctx) {
+      String? error;
+      bool busy = false;
+      return StatefulBuilder(builder: (ctx, set) {
+        Future<void> save() async {
+          if (a.text.length < 8) return set(() => error = 'Use at least 8 characters.');
+          if (a.text != b.text) return set(() => error = 'The two passwords do not match.');
+          set(() { busy = true; error = null; });
+          try {
+            await ref.read(authRepoProvider).setPassword(a.text);
+            if (ctx.mounted) Navigator.of(ctx).pop();
+            if (context.mounted) showToast(context, 'Password saved. You can now sign in with your email too.');
+          } catch (_) {
+            set(() { busy = false; error = 'Could not save the password. Please try again.'; });
+          }
+        }
+
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          FieldBlock(label: 'New password', hint: 'At least 8 characters.', child: TextField(controller: a, obscureText: true, autofillHints: const [AutofillHints.newPassword], textInputAction: TextInputAction.next)),
+          FieldBlock(label: 'Repeat the password', child: TextField(controller: b, obscureText: true, autofillHints: const [AutofillHints.newPassword], textInputAction: TextInputAction.done, onSubmitted: (_) => save())),
+          ErrorText(error),
+          AppButton(label: 'Save password', variant: AppButtonVariant.dark, block: true, loading: busy, onPressed: save),
+        ]);
+      });
+    });
   }
 
   static const _bcsDog = {1: 'Very thin', 3: 'Thin', 4: 'Slightly lean', 5: 'Ideal', 6: 'Slightly heavy', 7: 'Heavy', 9: 'Obese'};

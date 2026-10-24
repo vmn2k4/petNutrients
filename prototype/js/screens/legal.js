@@ -1,10 +1,10 @@
 // LEGAL PAGES: /privacy, /terms, /disclaimer.
-// Template — have a lawyer licensed in BC review before launch. Fill every TODO before going live.
+// Have a lawyer licensed in BC review before launch.
 import { pageBand, esc } from '../ui.js';
 import { breadcrumbLd, crumbsHtml } from '../seo.js';
 
 export const LEGAL = {
-  operator: '[TODO: legal name of operator / company]',
+  operator: 'RMRM Group Inc.',
   email: 'contact@choseno.com',
   updated: '23 October 2026',
 };

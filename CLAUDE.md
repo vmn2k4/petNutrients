@@ -1,4 +1,4 @@
-# Pet Nutrition Matcher: project rules
+# Pet Diet & Weight Tracker: project rules
 
 Global (not Canada-only) dog and cat nutrition app. Web first (Next.js + Supabase + Vercel), Flutter mobile later. Read `data/DATA_GUIDE.md` and `data/USER_FLOW.md` for data and screens. Anything marked "Proposal" there is a product decision, not a fact.
 

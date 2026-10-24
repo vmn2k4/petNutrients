@@ -234,7 +234,7 @@ otp_length = 6
 otp_expiry = 3600
 
 [auth.email.template.magic_link]
-subject = "Your Pet Nutrition Matcher log in code"
+subject = "Your Pet Diet & Weight Tracker log in code"
 content_path = "./supabase/templates/magic_link.html"
 
 [auth.email.template.email_change]
@@ -242,11 +242,11 @@ subject = "Your code to save your pet's plan"
 content_path = "./supabase/templates/email_change.html"
 
 [auth.email.template.recovery]
-subject = "Reset your Pet Nutrition Matcher password"
+subject = "Reset your Pet Diet & Weight Tracker password"
 content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.confirmation]
-subject = "Confirm your email for Pet Nutrition Matcher"
+subject = "Confirm your email for Pet Diet & Weight Tracker"
 content_path = "./supabase/templates/confirmation.html"
 
 # Use a production-ready SMTP server

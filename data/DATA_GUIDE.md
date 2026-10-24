@@ -1,4 +1,4 @@
-# Pet Nutrition Matcher: Data Guide for Developers and Founders
+# Pet Diet & Weight Tracker: Data Guide for Developers and Founders
 
 *Version 2, updated 2026-10-20 (PT): adds §7 on regions, availability and reviews. It covers everything under `/workspace/petfood/appdata` and `/workspace/petfood/data`.*
 

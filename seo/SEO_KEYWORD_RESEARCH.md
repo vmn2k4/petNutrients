@@ -1,4 +1,4 @@
-# SEO Keyword Research: Free Pet Nutrition Matcher (dogs + cats)
+# SEO Keyword Research: Free Pet Diet & Weight Tracker (dogs + cats)
 *Prepared 21 Oct 2026 (PT) for Murugappan, Vancouver. This extends `../market_validation_brief.md` (17 Oct), which covered brand trust, "best X canada", food formats, and the incumbents. This document adds tool/calculator intent, multiple markets (CA/US/UK/AU), page mapping, and on-page copy.*
 
 **Data rules.** I had no logins for Keyword Planner, Ahrefs, or Semrush, so **this document contains no absolute search volumes.** The signals used are:

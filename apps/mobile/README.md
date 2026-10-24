@@ -1,4 +1,4 @@
-# Pet Nutrition Matcher (Flutter)
+# Pet Diet & Weight Tracker (Flutter)
 
 Clean layers (checked by `test/architecture_test.dart`):
 

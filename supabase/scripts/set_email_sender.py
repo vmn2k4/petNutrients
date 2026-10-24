@@ -43,14 +43,14 @@ def main():
     if missing and not dry:
         sys.exit("Missing in .env.local: " + ", ".join(missing) + "\nSee the header of this file for what each one is.")
     host = env.get("SMTP_HOST", "smtp.resend.com"); port = env.get("SMTP_PORT", "465"); user = env.get("SMTP_USER", "resend")
-    sender = env.get("SENDER_EMAIL", "hello@example.com"); name = env.get("SENDER_NAME", "Pet Nutrition Matcher")
+    sender = env.get("SENDER_EMAIL", "hello@example.com"); name = env.get("SENDER_NAME", "Pet Diet & Weight Tracker")
     per_hour = int(env.get("EMAILS_PER_HOUR", "30"))
     t = lambda n: (ROOT / f"supabase/templates/{n}.html").read_text()
     smtp = {"smtp_host": host, "smtp_port": port, "smtp_user": user, "smtp_pass": env.get("SMTP_PASS", "<missing>"),
             "smtp_admin_email": sender, "smtp_sender_name": name, "rate_limit_email_sent": per_hour}
     templates = {
-        "mailer_subjects_confirmation": "Confirm your email for Pet Nutrition Matcher", "mailer_templates_confirmation_content": t("confirmation"),
-        "mailer_subjects_recovery": "Reset your Pet Nutrition Matcher password", "mailer_templates_recovery_content": t("recovery"),
+        "mailer_subjects_confirmation": "Confirm your email for Pet Diet & Weight Tracker", "mailer_templates_confirmation_content": t("confirmation"),
+        "mailer_subjects_recovery": "Reset your Pet Diet & Weight Tracker password", "mailer_templates_recovery_content": t("recovery"),
         "password_min_length": 8,
     }
     if dry:

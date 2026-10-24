@@ -1,4 +1,4 @@
-# Design System: Pet Nutrition Matcher
+# Design System: Pet Diet & Weight Tracker
 
 Source of truth in code: `prototype/css/tokens.css` (later `packages/tokens/tokens.json`). This file explains the decisions.
 Generated starting point: ui-ux-pro-max `--design-system` (dials: variance 3, motion 3, density 2 = calm, spacious). Where the tool's picks did not fit, we overrode them (below).

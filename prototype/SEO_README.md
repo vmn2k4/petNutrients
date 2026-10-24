@@ -1,4 +1,4 @@
-# SEO and deploy guide — Pet Nutrition Matcher
+# SEO and deploy guide — Pet Diet & Weight Tracker
 
 ## What this build does
 - **Path routing** (History API): `/foods`, `/guides/<slug>`, `/can-dogs-eat/<slug>`, `/growth`, etc. Old `#/foods` bookmarks are redirected once to `/foods`.

@@ -1,4 +1,4 @@
-# Pet Nutrition Matcher: Sitemap, User Flows and Screens
+# Pet Diet & Weight Tracker: Sitemap, User Flows and Screens
 
 *Version 2, updated 2026-10-20 (PT): adds regions/availability and reviews, per DATA_GUIDE §7. This is a companion to `DATA_GUIDE.md` in the same folder. Dataset names, formulas and gaps here match that guide. Anything marked **Proposal** is a product decision, not a fact from the data.*
 

@@ -107,7 +107,7 @@ function show(animate = false) {
     const vt = document.startViewTransition(paint);
     vt.ready.catch(() => {}); vt.finished.catch(() => {}); vt.updateCallbackDone.catch(() => {});
   } else paint();
-  document.title = view.title.length > 40 ? view.title : `${view.title} · Pet Nutrition Matcher`;
+  document.title = view.title.length > 40 ? view.title : `${view.title} · Pet Diet & Weight Tracker`;
   setMeta(hash, view);
   setCurrent(hash);
 }

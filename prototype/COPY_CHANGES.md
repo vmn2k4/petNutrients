@@ -43,7 +43,7 @@ Honesty rules kept: no invented stats, testimonials or vet endorsements. The mea
 ## SEO
 - `index.html`: unique title (59 chars), meta description (135), robots, theme-color, canonical, Open Graph (type, site_name, title, description, url, image `assets/hero-dog-cat.jpg` plus alt), Twitter `summary_large_image`, and JSON-LD `@graph` with Organization, WebSite and WebApplication (free Offer price 0, no ratings). FAQPage and Product schema were left out on purpose: there is no real FAQ content, and the product data is still sample data. Add Product schema once real products exist, and never with invented ratings or prices. `lang="en"`, charset and viewport were already there.
 - **TODO:** replace `https://example.com` in `index.html`, `robots.txt`, `sitemap.xml` and `js/app.js` (`SITE`).
-- Route titles, 45–60 chars with " · Pet Nutrition Matcher": Dog and Cat Food Matched to Your Pet; Build your pet profile; Dog and cat food matches; {food name}; Scan a pet food label; Can my dog or cat eat this? Toxic foods; Free pet nutrition tools; Dog and cat nutrition guides; Home-cooked pet food recipe checker.
+- Route titles, 45–60 chars with " · Pet Diet & Weight Tracker": Dog and Cat Food Matched to Your Pet; Build your pet profile; Dog and cat food matches; {food name}; Scan a pet food label; Can my dog or cat eat this? Toxic foods; Free pet nutrition tools; Dog and cat nutrition guides; Home-cooked pet food recipe checker.
 - Per-route descriptions (111–137 chars) come from `SEO` in `js/app.js`. Keywords are drawn from autocomplete research: best dog food for allergies / sensitive stomach / puppies / seniors, best cat food for kittens / indoor / picky eaters, cost per day, AAFCO, toxic foods.
 - Each route has exactly one h1 (verified at 1440 and 390 px). Decorative images keep `alt=""`; the hero image keeps a descriptive alt.
 - Added `robots.txt` and `sitemap.xml`.
@@ -52,7 +52,7 @@ Honesty rules kept: no invented stats, testimonials or vet endorsements. The mea
 ---
 # Round 2 (21 Oct 2026, 03:18–03:40 PT): keyword titles, growth-goal copy, blog guide
 Backup: `../prototype_backup_copy_20261021-031822/`. Text, meta and data only. No logic or layout changes.
-One small exception: `js/app.js` now uses titles longer than 40 characters as-is and adds " · Pet Nutrition Matcher" only to shorter ones, so keyword titles stay around 60 characters.
+One small exception: `js/app.js` now uses titles longer than 40 characters as-is and adds " · Pet Diet & Weight Tracker" only to shorter ones, so keyword titles stay around 60 characters.
 
 ## Titles and H1s from SEO_KEYWORD_RESEARCH.md §4
 Unverifiable claims were left out: "500+ foods", "Vet-Sourced", "printable", "no app needed", "6 questions", "sold in your country" (no region feature yet), and "ingredients/allergens" for the scanner (it reads the guaranteed analysis only).
